@@ -86,9 +86,6 @@ int set_client_socket()
 }
 
 
-
-
-
 void stream_listen()
 {
     parse_header(&stream);
@@ -98,6 +95,7 @@ void stream_listen()
     }
 
     debug_print("%s\n", "getting data");
+
     while (true) {
         parse_data(&stream);
     }

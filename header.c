@@ -23,16 +23,15 @@ int extract_header_fields(header_t *header, char *buffer)
 
 int get_http_header_field(char *header, const char* field, char* value)
 {
-    char *occurrence = NULL;
-    int content_pos = 0;
+    char *occurrence = strstr(header, field);
+    int content_pos = strlen(field) + 1;
 
-    occurrence  = strstr(header, field);
-    content_pos = strlen(field)+1;
     for (int i = content_pos; occurrence[i] != '\0'; i++) {
         if (is_cr_present(occurrence, i)) {
             // "<field>:" is deleted
-            strncpy(value, occurrence+content_pos, i-content_pos);
-            value[i-content_pos-1] = '\0';
+            strncpy(value, occurrence + content_pos, i - content_pos);
+            value[i - content_pos - 1] = '\0';
+
             return 0;
         }
     }
@@ -44,23 +43,26 @@ int get_http_header_field(char *header, const char* field, char* value)
 
 int get_metadata_field(char *metadata, const char* field, char* value)
 {
-    char *split;
+    char *split = strtok(metadata, ";");
     char *occurrence = NULL;
-    split = strtok (metadata,";");
+
     while (split != NULL) {
-        occurrence  = strstr(split, field);
+        occurrence = strstr(split, field);
+
         if (occurrence != NULL) {
-            unsigned int content_pos = strlen(field)+2;
-            unsigned int content_size = strlen(split)-content_pos-1;
-            strncpy(value, occurrence+content_pos, content_size);
+            unsigned int content_pos = strlen(field) + 2;
+            unsigned int content_size = strlen(split) - content_pos - 1;
+
+            strncpy(value, occurrence + content_pos, content_size);
             value[content_size] = '\0';
+
             return 0;
         }
-        split = strtok (NULL,";");
+        split = strtok(NULL, ";");
     }
 
     // Value hasn't been found
-    value[0]='\0';
+    value[0] = '\0';
     return 1;
 }
 

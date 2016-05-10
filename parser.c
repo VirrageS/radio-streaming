@@ -84,6 +84,7 @@ int check_metadata(stream_t *stream)
         }
     }
 
+    // extract title from metadata
     char metadata_content[MAX_METADATA_LENGTH];
     strncpy(metadata_content, stream->buffer, metadata_length);
     get_metadata_field(metadata_content, "StreamTitle", stream->title);
