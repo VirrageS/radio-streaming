@@ -42,6 +42,28 @@ int get_http_header_field(char *header, const char* field, char* value)
     return 1;
 }
 
+int get_metadata_field(char *metadata, const char* field, char* value)
+{
+    char *split;
+    char *occurrence = NULL;
+    split = strtok (metadata,";");
+    while (split != NULL) {
+        occurrence  = strstr(split, field);
+        if (occurrence != NULL) {
+            unsigned int content_pos = strlen(field)+2;
+            unsigned int content_size = strlen(split)-content_pos-1;
+            strncpy(value, occurrence+content_pos, content_size);
+            value[content_size] = '\0';
+            return 0;
+        }
+        split = strtok (NULL,";");
+    }
+
+    // Value hasn't been found
+    value[0]='\0';
+    return 1;
+}
+
 bool is_cr_present(char *str, int pos)
 {
     if (str[pos-1] == '\r' && str[pos] == '\n')
@@ -52,14 +74,14 @@ bool is_cr_present(char *str, int pos)
 
 int print_header(header_t *header)
 {
-	printf("##################################\n");
-	printf("Name\t: %s\n", header->icy_name);
-	printf("icy-notice1\t: %s\n", header->icy_notice1);
-	printf("icy-notice2\t: %s\n", header->icy_notice2);
-	printf("Genre\t: %s\n", header->icy_genre);
-	//printf("Public\t: %s\n", (header->icy_pub?"yes":"no"));
-	printf("Bitrate : %s kbit/s\n", header->icy_br);
-	printf("metaint\t: %d\n", header->metaint);
-	printf("##################################\n");
-	return 0;
+    printf("##################################\n");
+    printf("Name\t: %s\n", header->icy_name);
+    printf("icy-notice1\t: %s\n", header->icy_notice1);
+    printf("icy-notice2\t: %s\n", header->icy_notice2);
+    printf("Genre\t: %s\n", header->icy_genre);
+    //printf("Public\t: %s\n", (header->icy_pub?"yes":"no"));
+    printf("Bitrate : %s kbit/s\n", header->icy_br);
+    printf("metaint\t: %d\n", header->metaint);
+    printf("##################################\n");
+    return 0;
 }

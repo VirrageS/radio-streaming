@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#include "stream.h"
-
 typedef struct
 {
     char icy_name[500];
@@ -22,6 +20,7 @@ typedef struct
 
 int extract_header_fields(header_t *header, char *buffer);
 int get_http_header_field(char *header, const char* field, char* value);
+int get_metadata_field(char *metadata, const char* field, char* value);
 bool is_cr_present(char *str, int pos);
 int print_header(header_t *header);
 

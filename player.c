@@ -15,6 +15,7 @@
 #include "misc.h"
 #include "header.h"
 #include "stream.h"
+#include "parser.h"
 
 
 // GLOBALS
@@ -86,61 +87,11 @@ int set_client_socket()
         syserr("connect() failed");
 
     freeaddrinfo(addr_result);
+
+    debug_print("%s\n", "client socket initialized");
     return sock;
 }
 
-int parse_header(header_t *header, stream_t *stream)
-{
-    char *buffer = stream->buffer;
-
-    while (true) {
-        ssize_t bytes_received = recv(stream->socket, &buffer[stream->in_buffer], MAX_BUFFER - stream->in_buffer, 0);
-        if (bytes_received < 0) {
-            syserr("recv() failed");
-        } else if (bytes_received == 0) {
-            // syserr("recv(): connection closed");
-            debug_print("%s\n", "not recieving anything...");
-        } else {
-            int parse_point = -1;
-            for (size_t i = stream->in_buffer; i < stream->in_buffer + bytes_received; ++i) {
-                if (buffer[i-3] == '\r' && buffer[i-2] == '\n' &&
-                    buffer[i-1] == '\r' && buffer[i] == '\n')
-
-                parse_point = i;
-            }
-
-            stream->in_buffer += bytes_received;
-            debug_print("%s\n", "got some header...");
-
-            if (parse_point >= 0) {
-                debug_print("%s\n", "parsing headers...");
-                extract_header_fields(header, buffer);
-                memcpy(&buffer[0], &buffer[parse_point], stream->in_buffer - parse_point);
-                break;
-            }
-        }
-    }
-
-    return 0;
-}
-
-void parse_data(stream_t *stream)
-{
-    ssize_t bytes_received = recv(stream->socket, stream->buffer, MAX_BUFFER - stream->in_buffer, 0);
-    if (bytes_received < 0) {
-        syserr("recv() failed");
-    } else if (bytes_received == 0) {
-
-    } else {
-        // TODO: checking for particular data
-        // check if meta data header
-        // check if mp3 data
-
-        fprintf(stream->output_file, "%s", stream->buffer);
-        stream->in_buffer = 0;
-        memset(&stream->buffer, 0, sizeof(stream->buffer));
-    }
-}
 
 int send_stream_request(const stream_t *stream)
 {
@@ -152,7 +103,7 @@ int send_stream_request(const stream_t *stream)
 
 
     // TODO: add while
-    err = send(stream->stream_socket, request, sizeof(request), 0);
+    err = send(stream->socket, request, sizeof(request), 0);
     if (err < 0) {
         syserr("send() request failed");
     }
@@ -160,37 +111,30 @@ int send_stream_request(const stream_t *stream)
     return 0;
 }
 
+
 void stream_listen()
 {
     stream_t stream;
-    stream.stream_socket = shoutcast_socket;
+    stream.socket = shoutcast_socket;
     stream.output_file = output_file;
+    stream.in_buffer = 0;
+    memset(stream.buffer, 0, sizeof(stream.buffer));
 
-    header_t header;
-    parse_header(&header, &stream);
+    send_stream_request(&stream);
+    parse_header(&stream);
+
+    stream.current_interval = stream.header.metaint;
 
     if (DEBUG) {
-        print_header(&header);
+        print_header(&stream.header);
     }
 
+    debug_print("%s\n", "getting data");
     while (true) {
         parse_data(&stream);
     }
 }
 
-
-int strtob(bool *c, char* str)
-{
-    if (strcmp(str, "yes") == 0) {
-        *c = true;
-        return 0;
-    } else if (strcmp(str, "no") == 0) {
-        *c = false;
-        return 0;
-    }
-
-    return 1;
-}
 
 void validate_parameters(int argc, char *argv[])
 {
@@ -229,6 +173,7 @@ void validate_parameters(int argc, char *argv[])
             fatal("Could not create (%s) file.\n", file_name);
         }
     } else {
+        debug_print("%s\n", "printing to stdout");
         output_file = stdout;
     }
 }
