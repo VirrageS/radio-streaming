@@ -23,4 +23,7 @@ typedef struct {
     char title[MAX_METADATA_LENGTH];
 } stream_t;
 
+void stream_init(stream_t *stream, int sock, FILE* file);
+int send_stream_request(const stream_t *stream, const char* path);
+
 #endif

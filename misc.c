@@ -21,3 +21,19 @@ int strtob(bool* b, const char* str)
 
     return 1;
 }
+
+int remove_from_buffer(stream_t *stream, size_t bytes_count)
+{
+    stream->in_buffer -= bytes_count;
+    memmove(&stream->buffer[0], &stream->buffer[bytes_count], stream->in_buffer);
+    return 0;
+}
+
+int write_to_file(stream_t *stream, size_t bytes_count)
+{
+    fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
+    fflush(stream->output_file);
+
+    remove_from_buffer(stream, bytes_count);
+    return 0;
+}

@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include "stream.h"
+
 #define debug_print(fmt, ...) \
         do { if (DEBUG) { fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
                                 __LINE__, __func__, __VA_ARGS__); fflush(stderr); }} while (0)
@@ -12,5 +14,7 @@
 #define DEBUG 1
 
 int strtob(bool* b, const char* str);
+int write_to_file(stream_t *stream, size_t bytes_count);
+int remove_from_buffer(stream_t *stream, size_t bytes_count);
 
 #endif

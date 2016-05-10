@@ -23,22 +23,15 @@ char *host, *path, *file_name, *server_port_str;
 uint16_t server_port, listen_port;
 bool meta_data, save_to_file = true;
 
-// opened file to which we should save music
-FILE *output_file;
-
-// struct for current song
-// title, length or something like that
-
-int shoutcast_socket;
-
+stream_t stream;
 
 void clean_all()
 {
     if (save_to_file) {
-        fclose(output_file);
+        fclose(stream.output_file);
     }
 
-    close(shoutcast_socket);
+    close(stream.socket);
 }
 
 
@@ -93,37 +86,12 @@ int set_client_socket()
 }
 
 
-int send_stream_request(const stream_t *stream)
-{
-    int err;
-    // send request for shoutcast
-    char request[1000];
-    sprintf(request, "GET %s HTTP/1.0 \r\nIcy-MetaData: %d \r\n\r\n", path, (int)meta_data);
-    debug_print("request sent: %s\n", request);
 
-
-    // TODO: add while
-    err = send(stream->socket, request, sizeof(request), 0);
-    if (err < 0) {
-        syserr("send() request failed");
-    }
-
-    return 0;
-}
 
 
 void stream_listen()
 {
-    stream_t stream;
-    stream.socket = shoutcast_socket;
-    stream.output_file = output_file;
-    stream.in_buffer = 0;
-    memset(stream.buffer, 0, sizeof(stream.buffer));
-
-    send_stream_request(&stream);
     parse_header(&stream);
-
-    stream.current_interval = stream.header.metaint;
 
     if (DEBUG) {
         print_header(&stream.header);
@@ -136,7 +104,7 @@ void stream_listen()
 }
 
 
-void validate_parameters(int argc, char *argv[])
+FILE* validate_parameters(int argc, char *argv[])
 {
     host = argv[1];
     path = argv[2];
@@ -166,6 +134,7 @@ void validate_parameters(int argc, char *argv[])
         fatal("Meta data (%s) should be 'yes' or 'no'.\n", argv[6]);
     }
 
+    FILE* output_file;
     if (save_to_file) {
         output_file = fopen(file_name, "wb");
 
@@ -176,6 +145,8 @@ void validate_parameters(int argc, char *argv[])
         debug_print("%s\n", "printing to stdout");
         output_file = stdout;
     }
+
+    return output_file;
 }
 
 int main(int argc, char *argv[])
@@ -183,13 +154,12 @@ int main(int argc, char *argv[])
     signal(SIGINT, handle_signal);
     signal(SIGKILL, handle_signal);
 
-    // INITAL VALUES
-    int err;
+    FILE* output_file = validate_parameters(argc, argv);
+    int sock = set_client_socket();
 
-    validate_parameters(argc, argv);
+    stream_init(&stream, sock, output_file);
 
-    // setting up client socket
-    shoutcast_socket = set_client_socket();
+    send_stream_request(&stream, path);
     stream_listen();
 
     clean_all();
