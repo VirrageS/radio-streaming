@@ -15,7 +15,9 @@ void stream_init(stream_t *stream, int sock, FILE* file)
     stream->current_interval = 0;
     stream->in_buffer = 0;
     memset(stream->buffer, 0, sizeof(stream->buffer));
+
     memset(stream->title, 0, sizeof(stream->title));
+    stream->title[0] = '\0';
 }
 
 int send_stream_request(const stream_t *stream, const char* path)

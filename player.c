@@ -24,6 +24,7 @@ uint16_t server_port, listen_port;
 bool meta_data, save_to_file = true;
 
 stream_t stream;
+volatile bool player_on;
 
 void clean_all()
 {
@@ -48,6 +49,17 @@ void handle_commands()
 
     if (strcmp(command, "TITLE")) {
         // send current title
+        // send(stream->title);
+    } else if (strcmp(command, "PAUSE")) {
+
+    } else if (strcmp(command, "PLAY")) {
+
+    } else if (strcmp(command, "QUIT")) {
+        // close connection
+        // save file
+
+        player_on = false;
+        // clean_all() ???
     }
 }
 
@@ -96,7 +108,10 @@ void stream_listen()
 
     debug_print("%s\n", "getting data");
 
-    while (true) {
+    // command 'QUIT' can turn off player
+
+    player_on = true;
+    while (player_on) {
         parse_data(&stream);
     }
 }
@@ -152,10 +167,13 @@ int main(int argc, char *argv[])
     signal(SIGINT, handle_signal);
     signal(SIGKILL, handle_signal);
 
-    FILE* output_file = validate_parameters(argc, argv);
-    int sock = set_client_socket();
+    // TODO: thread which should handle commands (UDP)
 
-    stream_init(&stream, sock, output_file);
+
+    // set player stream
+    FILE* output_file = validate_parameters(argc, argv);
+    int stream_socket = set_client_socket();
+    stream_init(&stream, stream_socket, output_file);
 
     send_stream_request(&stream, path);
     stream_listen();
