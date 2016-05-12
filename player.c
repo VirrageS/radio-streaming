@@ -65,7 +65,7 @@ void* handle_commands(void *arg)
         struct sockaddr_in client;
         int client_len = sizeof(client);
 
-        ssize_t bytes_received = recvfrom(command_socket, &command[0], sizeof(command) - in_buffer, 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
+        ssize_t bytes_received = recvfrom(command_socket, &command[0], sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
             // syserr("read() handle_commands");
         } else if (bytes_received == 0) {
