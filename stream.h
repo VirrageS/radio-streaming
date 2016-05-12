@@ -7,25 +7,39 @@
 
 #include "header.h"
 
-#define MAX_BUFFER 100000
+#define MAX_BUFFER 5000
 #define MAX_METADATA_LENGTH 5000
 
 typedef struct {
-    size_t in_buffer;
-    char buffer[MAX_BUFFER];
+    size_t in_buffer; // stores how many data is in buffer
+    char buffer[MAX_BUFFER]; // buffer in which we store all the data
 
-    int socket;
-    FILE *output_file;
+    int socket; // socket on which we listen to ICY-Data
+    FILE *output_file; // file to which we should write our data
 
-    header_t header;
+    header_t header; // paresed ICY-Header
 
-    unsigned int current_interval;
+    unsigned int current_interval; // stores length of data to next ICY-MetaData header
     char title[MAX_METADATA_LENGTH];
 
-    volatile bool stream_on;
+    volatile bool stream_on; // check if stream is "playing" or "paused"
 } stream_t;
 
+/**
+    Initialize stream.
+
+    @param stream: Pointer to stream which we want to initialize.
+    @param sock: Socket on which we listen to stream.
+    @param file: Pointer to file to which we write all mp3 data.
+    **/
 void stream_init(stream_t *stream, int sock, FILE* file);
+
+/**
+    Sends request for listening ICY stream.
+
+    @param stream: Stream on which we want to listen.
+    @param path: Path on which are resources on http.
+    **/
 int send_stream_request(const stream_t *stream, const char* path);
 
 #endif

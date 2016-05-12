@@ -31,7 +31,7 @@ int remove_from_buffer(stream_t *stream, size_t bytes_count)
 
 int write_to_file(stream_t *stream, size_t bytes_count)
 {
-    if (stream->player_on) {
+    if (stream->stream_on) {
         fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
         fflush(stream->output_file);
     }
