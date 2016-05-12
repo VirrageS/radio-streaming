@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -43,6 +44,7 @@ void clean_all()
     }
 
     close(stream.socket);
+    close(command_socket);
 }
 
 
@@ -52,68 +54,81 @@ void handle_signal(int sig)
     exit(sig);
 }
 
-void* handle_commands()
+void* handle_commands(void *arg)
 {
     // get command
-    size_t in_buffer = 0;
-    char command[30000];
+    char command[10];
+
+    debug_print("%s\n", "handling command thread started...");
 
     while (player_on) {
-        ssize_t bytes_received = recv(command_socket, &command[in_buffer], sizeof(command) - in_buffer, 0);
+        struct sockaddr_in client;
+        int client_len = sizeof(client);
+
+        ssize_t bytes_received = recvfrom(command_socket, &command[0], sizeof(command) - in_buffer, 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
-            syserr("recv() handle_commands");
+            // syserr("read() handle_commands");
         } else if (bytes_received == 0) {
-            // do nothing
+            debug_print("%s\n", "recieved nothing...");
         } else {
-            in_buffer += bytes_received;
-            command[in_buffer] = '\0';
+            command[bytes_received] = '\0';
+
+            debug_print("received packet from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+            debug_print("%s\n", command);
 
             command_t c = NONE;
-            do {
-                char *cur_pos = NULL, *cur_min_pos = NULL;
 
-                if ((cur_pos = strstr(command, "TITLE")) != NULL) {
-                    if (cur_min_pos - cur_pos > 0) {
-                        cur_min_pos = cur_pos;
-                        c = TITLE;
-                    }
-                }
+            char *cur_pos = NULL;
+            char *cur_min_pos = &command[sizeof(command) - 1];
 
-                if ((cur_pos = strstr(command, "PAUSE")) != NULL) {
-                    if (cur_min_pos - cur_pos > 0) {
-                        cur_min_pos = cur_pos;
-                        c = PAUSE;
-                    }
+            if ((cur_pos = strstr(command, "TITLE")) != NULL) {
+                if (cur_min_pos - cur_pos > 0) {
+                    cur_min_pos = cur_pos;
+                    c = TITLE;
                 }
+            }
 
-                if ((cur_pos = strstr(command, "PLAY")) != NULL) {
-                    if (cur_min_pos - cur_pos > 0) {
-                        cur_min_pos = cur_pos;
-                        c = PLAY;
-                    }
+            if ((cur_pos = strstr(command, "PAUSE")) != NULL) {
+                if (cur_min_pos - cur_pos > 0) {
+                    cur_min_pos = cur_pos;
+                    c = PAUSE;
                 }
+            }
 
-                if ((cur_pos = strstr(command, "QUIT")) != NULL) {
-                    if (cur_min_pos - cur_pos > 0) {
-                        cur_min_pos = cur_pos;
-                        c = QUIT;
-                    }
+            if ((cur_pos = strstr(command, "PLAY")) != NULL) {
+                if (cur_min_pos - cur_pos > 0) {
+                    cur_min_pos = cur_pos;
+                    c = PLAY;
                 }
+            }
 
-                if (c == TITLE) {
-                    // send current title
-                    // send(command_socket, stream->title, strlen(stream->title), 0);
-                } else if (c == PAUSE) {
-                    stream.stream_on = false;
-                } else if (c == PLAY) {
-                    stream.stream_on = true;
-                } else if (c == QUIT) {
-                    player_on = false;
+            if ((cur_pos = strstr(command, "QUIT")) != NULL) {
+                if (cur_min_pos - cur_pos > 0) {
+                    cur_min_pos = cur_pos;
+                    c = QUIT;
                 }
-            } while (c != NONE);
+            }
+
+            if (c == TITLE) {
+                // send current title
+                sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, client_len);
+                debug_print("%s\n", "sending title");
+            } else if (c == PAUSE) {
+                stream.stream_on = false;
+                debug_print("%s\n", "stream paused");
+            } else if (c == PLAY) {
+                stream.stream_on = true;
+                debug_print("%s\n", "stream play");
+            } else if (c == QUIT) {
+                debug_print("%s\n", "quiting now");
+                player_on = false;
+            }
+
+            memset(&command[0], 0, sizeof(command));
         }
     }
 
+    debug_print("%s\n", "closing handling commands...");
     return 0;
 }
 
@@ -141,12 +156,13 @@ int set_command_socket()
     struct sockaddr_in server_address;
 
     // creating IPv4 UDP socket
-    int sock = socket(PF_INET, SOCK_DGRAM, 0);
+    int sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         syserr("socket() failed");
     }
 
     // binding the listening socket
+    debug_print("command port: %d\n", command_port);
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -168,14 +184,14 @@ void stream_listen()
         print_header(&stream.header);
     }
 
-    debug_print("%s\n", "getting data");
+    debug_print("%s\n", "stream is listening");
 
     // command 'QUIT' can turn off player
-
-    player_on = true;
     while (player_on) {
         parse_data(&stream);
     }
+
+    debug_print("%s\n", "stream is not listening");
 }
 
 
@@ -198,6 +214,7 @@ FILE* validate_parameters(int argc, char *argv[])
 
     // command_port_str = argv[5];
     tmp_port = strtol(argv[5], NULL, 10);
+    debug_print("tmp_port: %ld\n", tmp_port);
     if (tmp_port <= 0L) {
         fatal("Port (%s) should be number larger than 0.\n", argv[5]);
     }
@@ -228,11 +245,13 @@ int main(int argc, char *argv[])
     signal(SIGINT, handle_signal);
     signal(SIGKILL, handle_signal);
 
+    FILE* output_file = validate_parameters(argc, argv);
+    player_on = true;
+
     command_socket = set_command_socket();
     start_command_listener();
 
     // set player stream
-    FILE* output_file = validate_parameters(argc, argv);
     stream_init(&stream, output_file);
     set_stream_socket(&stream, host, server_port_str);
     send_stream_request(&stream, path);
