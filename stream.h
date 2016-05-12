@@ -21,6 +21,8 @@ typedef struct {
 
     unsigned int current_interval;
     char title[MAX_METADATA_LENGTH];
+
+    volatile bool stream_on;
 } stream_t;
 
 void stream_init(stream_t *stream, int sock, FILE* file);

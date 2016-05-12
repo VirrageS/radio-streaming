@@ -51,9 +51,9 @@ void handle_commands()
         // send current title
         // send(stream->title);
     } else if (strcmp(command, "PAUSE")) {
-
+        stream.stream_on = false;
     } else if (strcmp(command, "PLAY")) {
-
+        stream.stream_on = true;
     } else if (strcmp(command, "QUIT")) {
         // close connection
         // save file

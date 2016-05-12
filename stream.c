@@ -18,6 +18,8 @@ void stream_init(stream_t *stream, int sock, FILE* file)
 
     memset(stream->title, 0, sizeof(stream->title));
     stream->title[0] = '\0';
+
+    stream->stream_on = true;
 }
 
 int send_stream_request(const stream_t *stream, const char* path)
