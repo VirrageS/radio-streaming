@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include <pthread.h>
+
 #include "err.h"
 #include "misc.h"
 #include "header.h"
@@ -19,12 +21,20 @@
 
 
 // GLOBALS
-char *host, *path, *file_name, *server_port_str;
-uint16_t server_port, listen_port;
+char *host, *path, *file_name, *server_port_str, *command_port_str;
+uint16_t server_port, command_port;
 bool meta_data, save_to_file = true;
 
 stream_t stream;
 volatile bool player_on;
+
+int command_socket;
+
+pthread_t command_thread;
+
+typedef enum {
+    TITLE, PLAY, PAUSE, QUIT, NONE
+} command_t;
 
 void clean_all()
 {
@@ -42,58 +52,110 @@ void handle_signal(int sig)
     exit(sig);
 }
 
-void handle_commands()
+void* handle_commands()
 {
     // get command
-    char *command = "";
+    size_t in_buffer = 0;
+    char command[30000];
 
-    if (strcmp(command, "TITLE")) {
-        // send current title
-        // send(stream->title);
-    } else if (strcmp(command, "PAUSE")) {
-        stream.stream_on = false;
-    } else if (strcmp(command, "PLAY")) {
-        stream.stream_on = true;
-    } else if (strcmp(command, "QUIT")) {
-        // close connection
-        // save file
+    while (player_on) {
+        ssize_t bytes_received = recv(command_socket, &command[in_buffer], sizeof(command) - in_buffer, 0);
+        if (bytes_received < 0) {
+            syserr("recv() handle_commands");
+        } else if (bytes_received == 0) {
+            // do nothing
+        } else {
+            in_buffer += bytes_received;
+            command[in_buffer] = '\0';
 
-        player_on = false;
-        // clean_all() ???
+            command_t c = NONE;
+            do {
+                char *cur_pos = NULL, *cur_min_pos = NULL;
+
+                if ((cur_pos = strstr(command, "TITLE")) != NULL) {
+                    if (cur_min_pos - cur_pos > 0) {
+                        cur_min_pos = cur_pos;
+                        c = TITLE;
+                    }
+                }
+
+                if ((cur_pos = strstr(command, "PAUSE")) != NULL) {
+                    if (cur_min_pos - cur_pos > 0) {
+                        cur_min_pos = cur_pos;
+                        c = PAUSE;
+                    }
+                }
+
+                if ((cur_pos = strstr(command, "PLAY")) != NULL) {
+                    if (cur_min_pos - cur_pos > 0) {
+                        cur_min_pos = cur_pos;
+                        c = PLAY;
+                    }
+                }
+
+                if ((cur_pos = strstr(command, "QUIT")) != NULL) {
+                    if (cur_min_pos - cur_pos > 0) {
+                        cur_min_pos = cur_pos;
+                        c = QUIT;
+                    }
+                }
+
+                if (c == TITLE) {
+                    // send current title
+                    // send(command_socket, stream->title, strlen(stream->title), 0);
+                } else if (c == PAUSE) {
+                    stream.stream_on = false;
+                } else if (c == PLAY) {
+                    stream.stream_on = true;
+                } else if (c == QUIT) {
+                    player_on = false;
+                }
+            } while (c != NONE);
+        }
     }
+
+    return 0;
 }
 
-int set_client_socket()
+void start_command_listener()
 {
-    int err = 0;
-    struct addrinfo addr_hints;
-    struct addrinfo *addr_result;
+    int err;
 
-    // 'converting' host/port in string to struct addrinfo
-    memset(&addr_hints, 0, sizeof(struct addrinfo));
-    addr_hints.ai_family = AF_INET; // IPv4
-    addr_hints.ai_socktype = SOCK_STREAM;
-    addr_hints.ai_protocol = IPPROTO_TCP;
-    err = getaddrinfo(host, server_port_str, &addr_hints, &addr_result);
-    if (err == EAI_SYSTEM) { // system error
-        syserr("getaddrinfo: %s", gai_strerror(err));
-    } else if (err != 0) { // other error (host not found, etc.)
-        fatal("getaddrinfo: %s", gai_strerror(err));
+    err = pthread_create(&command_thread, 0, handle_commands, NULL);
+    if (err < 0) {
+        syserr("pthread_create");
     }
 
-    // initialize socket according to getaddrinfo results
-    int sock = socket(addr_result->ai_family, addr_result->ai_socktype, addr_result->ai_protocol);
-    if (sock < 0)
-        syserr("socket");
 
-    // connect socket to the server
-    err = connect(sock, addr_result->ai_addr, addr_result->ai_addrlen);
-    if (err < 0)
-        syserr("connect() failed");
+    err = pthread_detach(command_thread);
+    if (err < 0) {
+        syserr("pthread_detach");
+    }
 
-    freeaddrinfo(addr_result);
+    debug_print("%s\n", "command listener just have started");
+}
 
-    debug_print("%s\n", "client socket initialized");
+int set_command_socket()
+{
+    int err = 0;
+    struct sockaddr_in server_address;
+
+    // creating IPv4 UDP socket
+    int sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        syserr("socket() failed");
+    }
+
+    // binding the listening socket
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_address.sin_port = htons(command_port);
+    err = bind(sock, (struct sockaddr *) &server_address, sizeof(server_address));
+    if (err < 0) {
+        syserr("bind() failed");
+    }
+
     return sock;
 }
 
@@ -132,15 +194,14 @@ FILE* validate_parameters(int argc, char *argv[])
     if (tmp_port <= 0L) {
         fatal("Port (%s) should be number larger than 0.\n", argv[3]);
     }
-
     server_port = (uint16_t)tmp_port;
 
+    // command_port_str = argv[5];
     tmp_port = strtol(argv[5], NULL, 10);
     if (tmp_port <= 0L) {
         fatal("Port (%s) should be number larger than 0.\n", argv[5]);
     }
-
-    listen_port = (uint16_t)tmp_port;
+    command_port = (uint16_t)tmp_port;
 
     // validate meta data parameter
     if (strtob(&meta_data, argv[6]) != 0) {
@@ -167,15 +228,15 @@ int main(int argc, char *argv[])
     signal(SIGINT, handle_signal);
     signal(SIGKILL, handle_signal);
 
-    // TODO: thread which should handle commands (UDP)
-
+    command_socket = set_command_socket();
+    start_command_listener();
 
     // set player stream
     FILE* output_file = validate_parameters(argc, argv);
-    int stream_socket = set_client_socket();
-    stream_init(&stream, stream_socket, output_file);
-
+    stream_init(&stream, output_file);
+    set_stream_socket(&stream, host, server_port_str);
     send_stream_request(&stream, path);
+
     stream_listen();
 
     clean_all();

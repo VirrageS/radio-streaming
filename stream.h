@@ -29,10 +29,9 @@ typedef struct {
     Initialize stream.
 
     @param stream: Pointer to stream which we want to initialize.
-    @param sock: Socket on which we listen to stream.
     @param file: Pointer to file to which we write all mp3 data.
     **/
-void stream_init(stream_t *stream, int sock, FILE* file);
+void stream_init(stream_t *stream, FILE* file);
 
 /**
     Sends request for listening ICY stream.
@@ -41,5 +40,8 @@ void stream_init(stream_t *stream, int sock, FILE* file);
     @param path: Path on which are resources on http.
     **/
 int send_stream_request(const stream_t *stream, const char* path);
+
+
+int set_stream_socket(stream_t *stream, const char* host, const char* port);
 
 #endif
