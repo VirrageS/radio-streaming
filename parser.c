@@ -105,7 +105,7 @@ int parse_data(stream_t *stream)
     if (bytes_received < 0) {
         syserr("recv() failed");
     } else if (bytes_received == 0) {
-        debug_print("%s\n", "not recieving anything (data)...");
+        return -1;
     } else {
         stream->in_buffer += bytes_received;
 

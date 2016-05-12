@@ -188,7 +188,8 @@ void stream_listen()
 
     // command 'QUIT' can turn off player
     while (player_on) {
-        parse_data(&stream);
+        if (parse_data(&stream) < 0) // check if stream radio has ended connection
+            player_on = false;
     }
 
     debug_print("%s\n", "stream is not listening");
