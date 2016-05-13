@@ -207,9 +207,9 @@ FILE* validate_parameters(int argc, char *argv[])
 
     // validate ports
     server_port_str = argv[3];
-    long int tmp_port = strtol(argv[3], NULL, 10);
+    long int tmp_port = strtol(server_port_str, NULL, 10);
     if (tmp_port <= 0L) {
-        fatal("Port (%s) should be number larger than 0.\n", argv[3]);
+        fatal("Port (%s) should be number larger than 0.\n", server_port_str);
     }
     server_port = (uint16_t)tmp_port;
 
