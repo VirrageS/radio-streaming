@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
                 // fd_out = open("td_out", O_RDWR | O_NONBLOCK);
                 // dup2(fd_out, 1);
                 // close(fd_out);
-                execlp("ssh", "-t", "students", "./player", 0);
+                execlp("ssh", "-t", "students", "./player", NULL);
             }
         }
     }
