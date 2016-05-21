@@ -3,7 +3,7 @@ TARGET: master player
 CC		= gcc
 CFLAGS	= -Wall -O2 -std=gnu99 -pedantic-errors
 
-master: master.o err.o
+master: master.o err.o misc.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 player: player.o header.o misc.o parser.o err.o stream.o

@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include <signal.h>
 #include <pthread.h>
 
 #include "err.h"
