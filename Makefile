@@ -1,7 +1,7 @@
 TARGET: master player
 
-CC		= gcc
-CFLAGS	= -Wall -O2 -std=gnu99 -pedantic-errors
+CC = gcc
+CFLAGS = -Wall -O2 -std=gnu99 -pedantic-errors -lpthread
 
 master: master.o err.o misc.o
 	$(CC) $(CFLAGS) $^ -o $@
