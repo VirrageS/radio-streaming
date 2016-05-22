@@ -5,6 +5,14 @@
 #include "misc.h"
 #include "header.h"
 
+static bool is_cr_present(char *str, int pos)
+{
+    if (str[pos-1] == '\r' && str[pos] == '\n')
+        return true;
+    else
+        return false;
+}
+
 int extract_header_fields(header_t *header, char *buffer)
 {
     char metaint[20];
@@ -64,14 +72,6 @@ int get_metadata_field(char *metadata, const char* field, char* value)
     // Value hasn't been found
     value[0] = '\0';
     return 1;
-}
-
-bool is_cr_present(char *str, int pos)
-{
-    if (str[pos-1] == '\r' && str[pos] == '\n')
-        return true;
-    else
-        return false;
 }
 
 int print_header(header_t *header)
