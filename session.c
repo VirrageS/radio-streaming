@@ -192,6 +192,70 @@ radio_t* get_radio_by_id(session_t session, char* id)
 }
 
 
+
+
+
+static bool start_radio(radio_t *radio)
+{
+    if (!radio)
+        return false;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // fd_in = open("td_in", O_RDWR | O_NONBLOCK);
+        // dup2(fd_in, 0);
+        // close(fd_in);
+        // fd_out = open("td_out", O_RDWR | O_NONBLOCK);
+        // dup2(fd_out, 1);
+        // close(fd_out);
+
+        int err = execlp(
+            "ssh", "-t", radio->host,
+            "./player",
+                radio->player_host,
+                radio->resource_path,
+                radio->resource_port,
+                radio->player_file,
+                radio->port,
+                radio->player_meta_data,
+            NULL
+        );
+
+        if (err < 0) {
+            send_session_message(session, "SSH failed");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void* start_radio_at_time(void *arg)
+{
+    radio_t *radio = (radio_t*)arg;
+
+    time_t current_time = time(NULL);
+    struct tm *timeinfo = localtime(&current_time);
+
+    int sleep_time = (radio->hour - tm->tm_hour) * 3600 + (radio->minute - tm->tm_minutes) * 60;
+    if (sleep_time < 0)
+        return 0;
+
+    sleep(sleep_time);
+    start_radio(radio);
+    sleep(length * 60);
+
+    if (!radio)
+        return 0;
+
+    send_radio_command(radio, "QUIT");
+
+    return 0;
+}
+
+
+
+
 void parse_and_action(session_t *session, char* buffer, size_t end)
 {
     size_t start = 0;
@@ -209,7 +273,8 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
 
     // PARSE COMMAND
     char command[10], hour[4], minutes[4], computer[256], host[256], file[256], meta_data[4], id[256];
-    unsigned int resource_port, listen_port, time_length;
+    unsigned short resource_port, listen_port;
+    unsigned int time_length;
 
     // "START" COMMAND
     items = sscanf(buffer, "%s %s %s %s %u %s %u %s", &command, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
@@ -225,36 +290,23 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
 
 
         radio_t *radio = add_radio(session, &host, listen_port);
-
-        pid_t pid = fork();
-        if (pid == 0) {
-            // fd_in = open("td_in", O_RDWR | O_NONBLOCK);
-            // dup2(fd_in, 0);
-            // close(fd_in);
-            // fd_out = open("td_out", O_RDWR | O_NONBLOCK);
-            // dup2(fd_out, 1);
-            // close(fd_out);
-
-            int err = execlp("ssh", "-t", computer, "./player", host, path, resource_port, file, listen_port, meta_data, NULL);
-            if (err < 0) {
-                send_return_message(session, "SSH failed");
-                return;
-            }
-        }
+        start_radio(radio);
 
         char msg[100];
         strcpy(msg, "OK ");
         strcat(msg, radio->id);
 
-        send_return_message(session, &msg);
+        send_session_message(session, &msg);
         return;
     }
 
     // "AT" COMMAND
     items = sscanf(buffer, "%s %s:%s %u %s %s %s %u %s %u %s", &command, &hour, &minutes, &time_length, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
     if (items == 11) {
-        if (strcmp(command, "AT") != 0)
+        if (strcmp(command, "AT") != 0) {
+            send_session_message(session, "Invalid command");
             return;
+        }
 
         if ((strlen(hour) != 2) || (strlen(minutes) != 2))
             return;
@@ -273,12 +325,16 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0))
             return;
 
-        // TODO:
-        // start new thread
-        // sleep until HH:MM
-        // start player
-        // sleep M minutes
-        // send QUIT command
+
+        radio_t *radio = add_radio(session, &host, listen_port);
+        int err = pthread_create(&radio->thread, 0, start_radio_at_time, (void*)radio);
+        if (err < 0)
+            syserr("pthread_create");
+
+        err = pthread_detach(radio->thread);
+        if (err < 0)
+            syserr("pthread_detach");
+
         return;
     }
 

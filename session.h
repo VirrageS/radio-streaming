@@ -6,11 +6,21 @@
 #include <stdbool.h>
 
 typedef struct {
-    pthread_t radio_thread;
+    pthread_t thread;
     char* id;
 
     char* host;
-    int port;
+    unsigned long port;
+
+    char* player_host;
+    char* resource_path;
+    unsigned long resource_port;
+    char* player_file;
+    char* player_meta_data;
+
+    unsigned short hour;
+    unsigned short minute;
+    unsigned int interval;
 } radio_t;
 
 typedef struct {
