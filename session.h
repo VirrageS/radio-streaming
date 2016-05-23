@@ -13,10 +13,10 @@ typedef struct {
     unsigned long port;
 
     char* player_host;
-    char* resource_path;
-    unsigned long resource_port;
+    char* player_path;
+    unsigned long player_port;
     char* player_file;
-    char* player_meta_data;
+    char* player_md;
 
     unsigned short hour;
     unsigned short minute;
@@ -24,7 +24,7 @@ typedef struct {
 } radio_t;
 
 typedef struct {
-    pthread_t session_thread;
+    pthread_t thread;
     int socket;
     bool active;
 

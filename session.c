@@ -2,10 +2,32 @@
 
 void init_session(session_t *session)
 {
+    if (!session)
+        return;
+
+    session->socket = 0;
     session->active = true;
+
     session->in_buffer = 0;
-    session->length = 0;
     memset(&buffer, 0, sizeof(buffer));
+
+    session->length = 0;
+    session->radios = NULL;
+}
+
+void destroy_session(session_t *session)
+{
+    if (!session)
+        return;
+
+    for (size_t i = 0; i < session->length; ++i) {
+        destroy_radio(session->radios[i]);
+    }
+
+    free(session->radios);
+
+    init_session(session);
+    session->active = false;
 }
 
 
@@ -138,15 +160,44 @@ static char* generate_radio_id()
 
 void init_radio(radio_t *radio)
 {
+    if (!radio)
+        return;
+
     radio->id = NULL;
     radio->host = NULL;
-    radio->port = port;
+
+    radio->player_host = NULL;
+    radio->player_path = NULL;
+    radio->player_file = NULL;
+    radio->player_md = NULL;
+
+    radio->port = 0;
+    radio->player_port = 0;
+    radio->hour = 0;
+    radio->minute = 0;
+    radio->interval = 0;
 }
 
 
+void destroy_radio(radio_t *radio)
+{
+    if (!radio)
+        return;
+
+    free(radio->id);
+    free(radio->host);
+
+    free(radio->player_host);
+    free(radio->player_path);
+    free(radio->player_file);
+    free(radio->player_md);
+
+    init_radio(radio);
+}
+
 radio_t* add_radio(session_t *session, char *host, unsigned long port,
                    unsigned short hour, unsigned short minute, unsigned int interval,
-                   char *player_host, char *path, unsigned long resource_port, char *file, char *meta_data)
+                   char *player_host, char *player_path, unsigned long player_port, char *player_port, char *player_md)
 {
     radio_t radio;
     init_radio(&radio);
@@ -248,7 +299,7 @@ static void* start_radio_at_time(void *arg)
     time_t current_time = time(NULL);
     struct tm *timeinfo = localtime(&current_time);
 
-    int sleep_time = (radio->hour - tm->tm_hour) * 3600 + (radio->minute - tm->tm_minutes) * 60;
+    int sleep_time = (radio->hour - tm->tm_hour) * 3600 + (radio->minute - tm->tm_min) * 60;
     if (sleep_time < 0)
         return 0;
 
@@ -368,8 +419,8 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
         bool sent = send_radio_command(radio, &command);
         if (!sent) {
             // TODO:
-            // delete radio
             // send
+            return;
         }
 
         char msg[6000];
@@ -378,11 +429,11 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
 
         if (strcmp(command, "TITLE") == 0) {
             char buffer[5000];
-            sent = recv_radio_response(radio, &buffer);
-            if (sent) {
+            bool received = recv_radio_response(radio, &buffer);
+            if (!received) {
                 // TODO:
-                // delete radio
                 // send
+                return;
             }
 
             strcat(msg, buffer);
