@@ -17,6 +17,18 @@ char* master_port_str;
 
 sessions_t sessions;
 
+void clean_all()
+{
+    destroy_sessions(&sessions);
+}
+
+
+void handle_signal(int sig)
+{
+    clean_all();
+    exit(sig);
+}
+
 void* handle_session(void *arg)
 {
     session_t *session = (session_t*)(arg);
@@ -58,8 +70,6 @@ void* handle_session(void *arg)
     debug_print("%s\n", "closing handling session...");
     return 0;
 }
-
-
 
 
 
@@ -116,6 +126,9 @@ void validate_parameters(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
+    signal(SIGINT, handle_signal);
+    signal(SIGKILL, handle_signal);
+
     validate_parameters(argc, argv);
     set_master_socket();
 
@@ -140,5 +153,7 @@ int main(int argc, char* argv[])
         }
     }
 
+
+    clean_all();
     return 0;
 }

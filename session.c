@@ -34,7 +34,17 @@ void destroy_session(session_t *session)
 void init_sessions(sessions_t *sessions)
 {
     sessions->length = 0;
-    memset(&sessions->sessions, 0, sizeof(sessions->sessions));
+    sessions->sessions = NULL;
+}
+
+void destroy_sessions(sessions_t *sessions)
+{
+    for (size_t i = 0; i < sessions->length; ++i) {
+        destroy_session(sessions->sessions[i]);
+    }
+
+    free(sessions->sessions);
+    init_sessions(sessions);
 }
 
 session_t* add_session(sessions_t sessions)
