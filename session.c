@@ -136,21 +136,22 @@ static char* generate_radio_id()
     return strdup(id);
 }
 
-void init_radio(radio_t *radio, char *host, int port)
+void init_radio(radio_t *radio)
 {
     radio->id = NULL;
-    radio->host = host;
+    radio->host = NULL;
     radio->port = port;
 }
 
 
-radio_t* add_radio(session_t *session, char *host, int port)
+radio_t* add_radio(session_t *session, char *host, unsigned long port,
+                   unsigned short hour, unsigned short minute, unsigned int interval,
+                   char *player_host, char *path, unsigned long resource_port, char *file, char *meta_data)
 {
     radio_t radio;
-    init_radio(&radio, host, port);
+    init_radio(&radio);
 
     char *id;
-
     bool check = false;
     while (!check) {
         check = true;
@@ -164,7 +165,17 @@ radio_t* add_radio(session_t *session, char *host, int port)
         }
     }
 
-    radio->id = id;
+    radio.id = id;
+    radio.host = strdup(host);
+    radio.port = port;
+    radio.hour = hour;
+    radio.minute = minute;
+    radio.interval = interval;
+    radio.resource_path = strdup(path);
+    radio.resource_port = resource_port;
+    radio.player_host = strdup(player_host);
+    radio.player_file = strdup(file);
+    radio.player_meta_data = strdup(meta_data);
 
     session->length += 1;
     session->radios = realloc(sessions->radios, sessions->length * sizeof(radio_t));
@@ -272,9 +283,9 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     int items;
 
     // PARSE COMMAND
-    char command[10], hour[4], minutes[4], computer[256], host[256], file[256], meta_data[4], id[256];
+    char command[10], hour[4], minute[4], computer[256], host[256], file[256], meta_data[4], id[256];
     unsigned short resource_port, listen_port;
-    unsigned int time_length;
+    unsigned int interval;
 
     // "START" COMMAND
     items = sscanf(buffer, "%s %s %s %s %u %s %u %s", &command, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
@@ -289,7 +300,7 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
             return;
 
 
-        radio_t *radio = add_radio(session, &host, listen_port);
+        radio_t *radio = add_radio(session, &computer, listen_port, 0, 0, 0, &host, &path, resource_port, &file, &meta_data);
         start_radio(radio);
 
         char msg[100];
@@ -301,22 +312,22 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     }
 
     // "AT" COMMAND
-    items = sscanf(buffer, "%s %s:%s %u %s %s %s %u %s %u %s", &command, &hour, &minutes, &time_length, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
+    items = sscanf(buffer, "%s %s:%s %u %s %s %s %u %s %u %s", &command, &hour, &minute, &interval, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
             send_session_message(session, "Invalid command");
             return;
         }
 
-        if ((strlen(hour) != 2) || (strlen(minutes) != 2))
+        if ((strlen(hour) != 2) || (strlen(minute) != 2))
             return;
 
-        int ihour = ((int)hour[0] * 10) + (int)hour[1];
+        short ihour = ((int)hour[0] * 10) + (int)hour[1];
         if ((ihour < 0) || (ihour > 24))
             return;
 
-        int iminutes = ((int)minutes[0] * 10) + (int)minutes[1];
-        if ((iminutes < 0) || (iminutes >= 60))
+        short iminute = ((int)minute[0] * 10) + (int)minute[1];
+        if ((iminute < 0) || (iminute >= 60))
             return;
 
         if (strcmp(file, "-") == 0)
@@ -326,7 +337,7 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
             return;
 
 
-        radio_t *radio = add_radio(session, &host, listen_port);
+        radio_t *radio = add_radio(session, &computer, listen_port, ihour, iminute, interval, &host, &path, resource_port, &file, &meta_data);
         int err = pthread_create(&radio->thread, 0, start_radio_at_time, (void*)radio);
         if (err < 0)
             syserr("pthread_create");
