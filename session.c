@@ -29,13 +29,18 @@ void destroy_session(session_t *session)
 
     free(session->radios);
 
-    init_session(session);
-
+    session->socket = 0;
     session->active = false;
+
+    session->in_buffer = 0;
+    memset(&buffer, 0, sizeof(buffer));
+
+    session->length = 0;
+    session->radios = NULL;
     pthread_mutex_destroy(&session->mutex);
 }
 
-void destroy_radio_with_id(session_t *session, char *id)
+void remove_radio_with_id(session_t *session, char *id)
 {
     pthread_mutex_lock(&session->mutex);
 
@@ -67,6 +72,11 @@ void destroy_radio_with_id(session_t *session, char *id)
 
 void init_sessions(sessions_t *sessions)
 {
+    if (!sessions)
+        return;
+
+    sessions->mutex = PTHREAD_MUTEX_INITIALIZER;
+
     sessions->length = 0;
     sessions->sessions = NULL;
 }
@@ -78,7 +88,10 @@ void destroy_sessions(sessions_t *sessions)
     }
 
     free(sessions->sessions);
-    init_sessions(sessions);
+
+    sessions->length = 0;
+    sessions->sessions = NULL;
+    pthread_mutex_destroy(&sessions->mutex);
 }
 
 session_t* add_session(sessions_t *sessions)
@@ -99,11 +112,39 @@ session_t* add_session(sessions_t *sessions)
         syserr("realloc(): lost all sessions");
     }
 
-    session_t *new_session = sessions->sessions[sessions->length - 1]
+    session_t *new_session = sessions->sessions[sessions->length - 1];
     init_session(new_session);
 
     pthread_mutex_unlock(&sessions->mutex);
     return new_session;
+}
+
+void remove_session(sessions_t *sessions)
+{
+    pthread_mutex_lock(&sessions->mutex);
+
+    size_t pos = 0;
+    bool found = false;
+
+    for (size_t i = 0; i < sessions->length; ++i) {
+        if (sessions->sessions[i] == session) {
+            pos = i;
+            found = true;
+        }
+    }
+
+    if (found) {
+        sessions->length -= 1;
+        if (pos < sessions->length)
+            memmove(sessions->sessions[pos], sessions->sessions[pos + 1], sizeof(session_t) * (sessions->length - pos));
+
+        sessions->sessions = realloc(sessions->sessions, sizeof(session_t) * (sessions->length));
+        if (sessions->sessions) {
+            // TODO: wtf?!?!?!??!
+        }
+    }
+
+    pthread_mutex_unlock(&sessions->mutex);
 }
 
 bool send_session_message(session_t *session, char *msg)
@@ -239,6 +280,11 @@ radio_t* add_radio(session_t *session, char *host, unsigned long port,
                    unsigned short hour, unsigned short minute, unsigned int interval,
                    char *player_host, char *player_path, unsigned long player_port, char *player_port, char *player_md)
 {
+    if (!session)
+        return;
+
+    pthread_mutex_lock(&session->mutex);
+
     radio_t radio;
     init_radio(&radio);
 
@@ -270,18 +316,22 @@ radio_t* add_radio(session_t *session, char *host, unsigned long port,
 
     session->length += 1;
     session->radios = realloc(sessions->radios, sessions->length * sizeof(radio_t));
-    if (!session->radios) {
-        session->active = false;
-        syserr("realloc(): lost all radios");
-        return 1;
+    if (session->radios) {
+        session->radios[session->length - 1] = radio;
     }
 
-    session->radios[session->length - 1] = radio;
+
+    pthread_mutex_unlock(&session->mutex);
     return 0;
 }
 
-radio_t* get_radio_by_id(session_t session, char* id)
+radio_t* get_radio_by_id(session_t *session, char* id)
 {
+    if (session)
+        return;
+
+    pthread_mutex_lock(&session->mutex);
+
     radio_t *radio = NULL;
     for (size_t i = 0; i < session->length; ++i) {
         if (strcmp(session->radios[i].id, id) == 0) {
@@ -290,6 +340,7 @@ radio_t* get_radio_by_id(session_t session, char* id)
         }
     }
 
+    pthread_mutex_unlock(&session->mutex);
     return radio;
 }
 
@@ -445,14 +496,14 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
         radio_t *radio = add_radio(session, &computer, listen_port, ihour, iminute, interval, &host, &path, resource_port, &file, &meta_data);
         int err = pthread_create(&radio->thread, 0, start_radio_at_time, (void*)radio);
         if (err < 0) {
-            destroy_radio_with_id(session, radio->id);
+            remove_radio_with_id(session, radio->id);
             send_session_message(session, "ERROR: Failed to create player");
             return;
         }
 
         err = pthread_detach(radio->thread);
         if (err < 0) {
-            destroy_radio_with_id(session, radio->id);
+            remove_radio_with_id(session, radio->id);
             send_session_message(session, "ERROR: Failed to create player");
             return;
         }
