@@ -29,6 +29,7 @@ void handle_signal(int sig)
     exit(sig);
 }
 
+
 void* handle_session(void *arg)
 {
     session_t *session = (session_t*)(arg);
@@ -45,25 +46,29 @@ void* handle_session(void *arg)
             session->in_buffer += bytes_recieved;
 
             size_t end = 0;
-            for (size_t i = 0; i < session->in_buffer - 1; ++i) {
-                if ((session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') ||
-                    (session->buffer[i + 1] == '\r' || session->buffer[i + 1] == '\n')) {
-                    end = i + 2;
+            for (size_t i = 0; i < session->in_buffer; ++i) {
+                if (i + 1 < session->in_buffer) {
+                    if (session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') {
+                        end = i + 2;
+                        break;
+                    }
+                }
+
+                if ((session->buffer[i] == '\r') || (session->buffer[i] == '\n')) {
+                    end = i + 1;
                     break;
                 }
             }
 
             if (end > 0) {
-                char* tmp_buffer = malloc(sizeof(char) * (session->end));
-                strncpy(&tmp_buffer, &session->buffer, session->end);
+                char* tmp_buffer = malloc(sizeof(char) * (end));
+                strncpy(tmp_buffer, &session->buffer[0], end);
 
-                parse_and_action(session, tmp_buffer);
+                parse_and_action(session, tmp_buffer, end);
 
                 free(tmp_buffer);
                 memset(&session->buffer, 0, end);
             }
-
-            memset(&session->buffer, 0, session->end);
         }
     }
 
@@ -142,7 +147,7 @@ int main(int argc, char* argv[])
         session_t *session = add_session(&sessions);
         session->socket = client_socket;
 
-        int err = pthread_create(&session->thread, 0, handle_commands, (void*)session);
+        int err = pthread_create(&session->thread, 0, handle_session, (void*)session);
         if (err < 0) {
             syserr("pthread_create");
         }

@@ -7,6 +7,7 @@
 
 typedef struct {
     pthread_t thread;
+    int player_stderr;
     char* id;
 
     char* host;
@@ -25,7 +26,7 @@ typedef struct {
 
 typedef struct {
     pthread_t thread;
-    mutex_t mutex;
+    pthread_mutex_t mutex;
 
     int socket;
     bool active;
@@ -38,7 +39,7 @@ typedef struct {
 } session_t;
 
 typedef struct {
-    mutex_t mutex;
+    pthread_mutex_t mutex;
 
     size_t length;
     session_t* sessions;
@@ -48,8 +49,12 @@ typedef struct {
 void init_session(session_t *session);
 void init_sessions(sessions_t *sessions);
 
-session_t* add_session(sessions_t sessions);
-int add_radio(session_t *session, radio_t *radio);
-radio_t* get_radio_by_id(const session_t *session, char* id);
+session_t* add_session(sessions_t *sessions);
+void destroy_sessions(sessions_t *sessions);
+// int add_radio(session_t *session, radio_t *radio);
+// radio_t* get_radio_by_id(const session_t *session, char* id);
+
+
+void parse_and_action(session_t *session, char* buffer, size_t end);
 
 #endif
