@@ -5,6 +5,8 @@ void init_session(session_t *session)
     if (!session)
         return;
 
+    session->mutex = PTHREAD_MUTEX_INITIALIZER;
+
     session->socket = 0;
     session->active = true;
 
@@ -22,12 +24,44 @@ void destroy_session(session_t *session)
 
     for (size_t i = 0; i < session->length; ++i) {
         destroy_radio(session->radios[i]);
+        session->radios[i] = NULL;
     }
 
     free(session->radios);
 
     init_session(session);
+
     session->active = false;
+    pthread_mutex_destroy(&session->mutex);
+}
+
+void destroy_radio_with_id(session_t *session, char *id)
+{
+    pthread_mutex_lock(&session->mutex);
+
+    size_t pos = 0;
+    bool found = false;
+
+    for (size_t i = 0; i < session->length; ++i) {
+        if (strcmp(session->radios[i].id, id) == 0) {
+            pos = i;
+            found = true;
+        }
+    }
+
+    if (found) {
+        destroy_radio(session->radios[pos]);
+
+        session->length -= 1;
+        memmove(session->radios[pos], session->radios[pos + 1], sizeof(radio_t) * (session->length - pos));
+        session->radios = realloc(session->radios, session->length);
+
+        if (!session->radios) {
+            // TODO: wtf?!!?!?!?!??
+        }
+    }
+
+    pthread_mutex_unlock(&session->mutex);
 }
 
 
@@ -47,8 +81,10 @@ void destroy_sessions(sessions_t *sessions)
     init_sessions(sessions);
 }
 
-session_t* add_session(sessions_t sessions)
+session_t* add_session(sessions_t *sessions)
 {
+    pthread_mutex_lock(&sessions->mutex);
+
     // check if we can reuse any session that was closed
     for (size_t i = 0; i < sessions->length; ++i) {
         if (!sessions[i].active) {
@@ -66,6 +102,7 @@ session_t* add_session(sessions_t sessions)
     session_t *new_session = sessions->sessions[sessions->length - 1]
     init_session(new_session);
 
+    pthread_mutex_unlock(&sessions->mutex);
     return new_session;
 }
 
@@ -107,19 +144,12 @@ bool send_radio_command(session_t *radio, char *msg)
     server_addr.sin_addr = *((struct in_addr *)host->h_addr);
     bzero(&(server_addr.sin_zero),8);
 
-    size_t in_buffer = 0;
-    while (true) {
-        ssize_t bytes_send = sendto(sock, &msg[in_buffer], strlen(msg) - in_buffer, 0, (struct sockaddr *)&server_addr, sizeof(struct sockaddr));
-        if (bytes_send < 0) {
-            syserr("send() failed when sending return messsage");
-        } else if (bytes_send == 0) {
-            return false;
-        } else {
-            in_buffer += bytes_send;
-        }
 
-        if (in_buffer == strlen(msg))
-            break;
+    ssize_t bytes_send = sendto(sock, &msg, strlen(msg), 0, (struct sockaddr *)&server_addr, sizeof(struct sockaddr));
+    if (bytes_send < 0) {
+        syserr("send() failed when sending return messsage");
+    } else if (bytes_send == 0) {
+        return false;
     }
 
     return true;
@@ -313,14 +343,18 @@ static void* start_radio_at_time(void *arg)
     if (sleep_time < 0)
         return 0;
 
+    // wait until specific time
     sleep(sleep_time);
+
+    // start radio
     start_radio(radio);
-    sleep(length * 60);
 
-    if (!radio)
-        return 0;
+    // wait to finish radio after interval
+    if (radio)
+        sleep(radio->interval * 60);
 
-    send_radio_command(radio, "QUIT");
+    if (radio)
+        send_radio_command(radio, "QUIT");
 
     return 0;
 }
@@ -351,15 +385,20 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     // "START" COMMAND
     items = sscanf(buffer, "%s %s %s %s %u %s %u %s", &command, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
     if (items == 8) {
-        if (strcmp(command, "START") != 0)
+        if (strcmp(command, "START") != 0) {
+            send_session_message(session, "ERROR: Invalid command");
             return;
+        }
 
-        if (strcmp(file, "-") == 0)
+        if (strcmp(file, "-") == 0) {
+            send_session_message(session, "ERROR: Invalid file name");
             return;
+        }
 
-        if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0))
+        if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
+            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]");
             return;
-
+        }
 
         radio_t *radio = add_radio(session, &computer, listen_port, 0, 0, 0, &host, &path, resource_port, &file, &meta_data);
         start_radio(radio);
@@ -376,36 +415,47 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     items = sscanf(buffer, "%s %s:%s %u %s %s %s %u %s %u %s", &command, &hour, &minute, &interval, &computer, &host, &path, &resource_port, &file, &listen_port, &meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
-            send_session_message(session, "Invalid command");
+            send_session_message(session, "ERROR: Invalid command");
             return;
         }
 
-        if ((strlen(hour) != 2) || (strlen(minute) != 2))
+        if ((strlen(hour) != 2) || (strlen(minute) != 2)) {
+            send_session_message(session, "ERROR: Invalid start hour or minute");
             return;
+        }
 
         short ihour = ((int)hour[0] * 10) + (int)hour[1];
-        if ((ihour < 0) || (ihour > 24))
-            return;
-
         short iminute = ((int)minute[0] * 10) + (int)minute[1];
-        if ((iminute < 0) || (iminute >= 60))
+        if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60))) {
+            send_session_message(session, "ERROR: Invalid start hour or minute");
             return;
+        }
 
-        if (strcmp(file, "-") == 0)
+        if (strcmp(file, "-") == 0) {
+            send_session_message(session, "ERROR: Invalid file name");
             return;
+        }
 
-        if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0))
+        if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
+            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]");
             return;
+        }
 
 
         radio_t *radio = add_radio(session, &computer, listen_port, ihour, iminute, interval, &host, &path, resource_port, &file, &meta_data);
         int err = pthread_create(&radio->thread, 0, start_radio_at_time, (void*)radio);
-        if (err < 0)
-            syserr("pthread_create");
+        if (err < 0) {
+            destroy_radio_with_id(session, radio->id);
+            send_session_message(session, "ERROR: Failed to create player");
+            return;
+        }
 
         err = pthread_detach(radio->thread);
-        if (err < 0)
-            syserr("pthread_detach");
+        if (err < 0) {
+            destroy_radio_with_id(session, radio->id);
+            send_session_message(session, "ERROR: Failed to create player");
+            return;
+        }
 
         return;
     }
@@ -413,23 +463,18 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     // PLAYER COMMANDS
     items = sscanf(buffer, "%s %s", &command, &id);
     if (items == 2) {
-        radio_t *radio = get_radio_by_id(session, id);
-        if (!radio) {
-            return;
-        }
-
         // check if any command matches
         if ((strcmp(command, "PAUSE") != 0) &&
             (strcmp(command, "PLAY") != 0) &&
             (strcmp(command, "TITLE") != 0) &&
             (strcmp(command, "QUIT") != 0)) {
+            send_session_message(session, "ERROR: Invalid command");
             return;
         }
 
-        bool sent = send_radio_command(radio, &command);
-        if (!sent) {
-            // TODO:
-            // send
+        radio_t *radio = get_radio_by_id(session, id);
+        if (!radio) {
+            send_session_message(session, "ERROR: Failed to create player");
             return;
         }
 

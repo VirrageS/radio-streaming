@@ -25,6 +25,8 @@ typedef struct {
 
 typedef struct {
     pthread_t thread;
+    mutex_t mutex;
+
     int socket;
     bool active;
 
@@ -36,6 +38,8 @@ typedef struct {
 } session_t;
 
 typedef struct {
+    mutex_t mutex;
+
     size_t length;
     session_t* sessions;
 } sessions_t;
