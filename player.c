@@ -66,7 +66,7 @@ void* handle_commands(void *arg)
         struct sockaddr_in client;
         int client_len = sizeof(client);
 
-        ssize_t bytes_received = recvfrom(command_socket, &command[0], sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
+        ssize_t bytes_received = recvfrom(command_socket, &command, sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
             // syserr("read() handle_commands");
         } else if (bytes_received == 0) {
@@ -77,55 +77,21 @@ void* handle_commands(void *arg)
             debug_print("received packet from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
             debug_print("%s\n", command);
 
-            command_t c = NONE;
-
-            char *cur_pos = NULL;
-            char *cur_min_pos = &command[sizeof(command) - 1];
-
-            if ((cur_pos = strstr(command, "TITLE")) != NULL) {
-                if (cur_min_pos - cur_pos > 0) {
-                    cur_min_pos = cur_pos;
-                    c = TITLE;
-                }
-            }
-
-            if ((cur_pos = strstr(command, "PAUSE")) != NULL) {
-                if (cur_min_pos - cur_pos > 0) {
-                    cur_min_pos = cur_pos;
-                    c = PAUSE;
-                }
-            }
-
-            if ((cur_pos = strstr(command, "PLAY")) != NULL) {
-                if (cur_min_pos - cur_pos > 0) {
-                    cur_min_pos = cur_pos;
-                    c = PLAY;
-                }
-            }
-
-            if ((cur_pos = strstr(command, "QUIT")) != NULL) {
-                if (cur_min_pos - cur_pos > 0) {
-                    cur_min_pos = cur_pos;
-                    c = QUIT;
-                }
-            }
-
-            if (c == TITLE) {
-                // send current title
+            if (strcmp(command, "TITLE") == 0) {
+                debug_print("%s\n", "sending current title");
                 sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, client_len);
-                debug_print("%s\n", "sending title");
-            } else if (c == PAUSE) {
-                stream.stream_on = false;
+            } else if (strcmp(command, "PAUSE") == 0) {
                 debug_print("%s\n", "stream paused");
-            } else if (c == PLAY) {
-                stream.stream_on = true;
+                stream.stream_on = false;
+            } else if (strcmp(command, "PLAY") == 0) {
                 debug_print("%s\n", "stream play");
-            } else if (c == QUIT) {
+                stream.stream_on = true;
+            } else if (strcmp(command, "QUIT") == 0) {
                 debug_print("%s\n", "quiting now");
                 player_on = false;
             }
 
-            memset(&command[0], 0, sizeof(command));
+            memset(&command, 0, sizeof(command));
         }
     }
 
