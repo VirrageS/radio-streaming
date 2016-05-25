@@ -36,60 +36,87 @@ void* handle_session(void *arg)
 
     bool end_session = false;
     while (!end_session) {
+        debug_print("%s\n", "before poll...");
         int err = poll(session->poll_sockets.data(), (int)session->poll_sockets.size(), session->get_timeout() * 1000);
+        debug_print("%s\n", "poll activated...");
 
         if (err < 0) {
             end_session = true;
         } else if (err == 0) {
             session->handle_timeout();
-            debug_print("%s", "time out");
-            end_session = true;
         } else {
-            for (auto descriptor : session->poll_sockets) {
-                if (descriptor.revents == 0)
+            for (auto descriptor = session->poll_sockets.begin(); descriptor != session->poll_sockets.end(); ++descriptor) {
+                if (descriptor->revents == 0)
                     continue;
 
-                if (!(descriptor.revents & (POLLIN | POLLHUP))) {
-                    debug_print("[ERROR] revents = %d\n", descriptor.revents);
+                if (!(descriptor->revents & (POLLIN | POLLHUP))) {
+                    debug_print("[ERROR] revents = %d\n", descriptor->revents);
                     end_session = true;
                     break;
                 }
 
-                if (descriptor.revents & POLLIN) {
-                    ssize_t bytes_recieved = read(session->socket, &session->buffer[session->in_buffer], sizeof(session->buffer) - session->in_buffer);
+                if (descriptor->fd != session->socket) {
+                    // we got message on player stderr
+                    // so we should delete this
+                    char buffer[1024];
+                    read(descriptor->fd, buffer, sizeof(buffer));
 
-                    session->in_buffer += bytes_recieved;
+                    for (auto radio : session->radios) {
+                        if (radio.player_stderr == descriptor->fd) {
+                            std::string msg = "ERROR " + radio.id + ": " + buffer;
 
-                    debug_print("%s\n", "got something to read");
-                    debug_print("message: %s\n", session->buffer);
-
-                    size_t end = 0;
-                    for (size_t i = 0; i < session->in_buffer; ++i) {
-                        if (i + 1 < session->in_buffer) {
-                            if (session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') {
-                                end = i + 2;
-                                break;
-                            }
-                        }
-
-                        if ((session->buffer[i] == '\r') || (session->buffer[i] == '\n')) {
-                            end = i + 1;
+                            session->send_session_message(msg);
+                            session->remove_radio_with_id(radio.id);
                             break;
                         }
                     }
 
-                    if (end > 0) {
-                        char* tmp_buffer = (char*)malloc(sizeof(char) * (end));
-                        strncpy(tmp_buffer, &session->buffer[0], end);
+                    session->poll_sockets.erase(descriptor);
+                } else {
+                    ssize_t bytes_recieved = read(session->socket, &session->buffer[session->in_buffer], sizeof(session->buffer) - session->in_buffer);
+                    if (bytes_recieved < 0) {
+                        if (errno != EWOULDBLOCK) {
+                            std::cerr << "read() in session failed" << std::endl;
+                            end_session = true;
+                        }
+                    } else if (bytes_recieved == 0) {
+                        end_session = true;
+                    } else {
+                        session->in_buffer += bytes_recieved;
 
-                        session->parse_and_action(tmp_buffer, end);
+                        debug_print("%s\n", "got something to read");
+                        debug_print("message: %s\n", session->buffer);
 
-                        free(tmp_buffer);
+                        size_t end = 0;
+                        for (size_t i = 0; i < session->in_buffer; ++i) {
+                            if (i + 1 < session->in_buffer) {
+                                if (session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') {
+                                    end = i + 2;
+                                    break;
+                                }
+                            }
 
-                        session->in_buffer -= end;
-                        memset(&session->buffer, 0, end);
+                            if ((session->buffer[i] == '\r') || (session->buffer[i] == '\n')) {
+                                end = i + 1;
+                                break;
+                            }
+                        }
+
+                        if (end > 0) {
+                            char* tmp_buffer = (char*)malloc(sizeof(char) * (end));
+                            strncpy(tmp_buffer, &session->buffer[0], end);
+
+                            session->parse_and_action(tmp_buffer, end);
+
+                            free(tmp_buffer);
+
+                            session->in_buffer -= end;
+                            memset(&session->buffer, 0, end);
+                        }
                     }
                 }
+
+                break;
             }
         }
     }

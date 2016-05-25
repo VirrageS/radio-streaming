@@ -45,7 +45,7 @@ void Session::remove_radio_with_id(std::string id)
     }
 
     std::priority_queue<Event> tmp_events;
-    for (; events.empty(); events.pop()) {
+    for (; !events.empty(); events.pop()) {
         auto event = events.top();
         if (event.radio_id != id)
             tmp_events.push(event);
@@ -63,7 +63,10 @@ bool Session::send_session_message(std::string message)
     size_t to_sent = 0;
     while (true) {
         ssize_t bytes_send = send(socket, &msg[to_sent], strlen(msg) - to_sent, 0);
-        if (bytes_send <= 0) {
+        if (bytes_send < 0) {
+            if (errno != EWOULDBLOCK)
+                return false;
+        } else if (bytes_send == 0) {
             return false;
         } else {
             to_sent += bytes_send;
@@ -172,16 +175,16 @@ Radio& Session::add_radio(char *host, unsigned long port,
         }
     }
 
-    radio.host = strdup(host);
+    radio.host = (char *)strdup(host);
     radio.port = port;
     radio.hour = hour;
     radio.minute = minute;
     radio.interval = interval;
-    radio.player_path = strdup(player_path);
+    radio.player_host = (char *)strdup(player_host);
+    radio.player_path = (char *)strdup(player_path);
     radio.player_port = player_port;
-    radio.player_host = strdup(player_host);
-    radio.player_file = strdup(player_file);
-    radio.player_md = strdup(player_md);
+    radio.player_file = (char *)strdup(player_file);
+    radio.player_md = (char *)strdup(player_md);
 
     radios.push_back(radio);
     return radios.back();
@@ -213,8 +216,9 @@ bool Radio::start_radio()
         close(err_pipe[0]);
         dup2(err_pipe[1], 2);
 
+        // TODO: all have to be chars
         int err = execlp(
-            "ssh", "-t", host,
+            "ssh", "ssh", host,
             "./player",
                 player_host,
                 player_path,
@@ -226,11 +230,11 @@ bool Radio::start_radio()
         );
 
         if (err < 0) {
-            char msg[] = "SSH failed\n";
+            char msg[] = "SSH failed \n";
             write(err_pipe[1], msg, sizeof(msg));
         }
 
-        _exit(0);
+        exit(0);
     } else {
         close(err_pipe[1]);
         player_stderr = err_pipe[0];
@@ -332,7 +336,6 @@ void Session::parse_and_action(char* buffer, size_t end)
         }
 
         Radio& radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
-        radio.print_radio();
 
         bool started = radio.start_radio();
         if (!started) {
@@ -380,7 +383,34 @@ void Session::parse_and_action(char* buffer, size_t end)
 
 
         Radio& radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
-        // TODO: 2x add events
+
+        time_t current_time = time(NULL);
+        auto t = localtime(&current_time);
+
+        if (ihour < t->tm_hour) {
+            current_time += (24 - t->tm_hour + ihour) * 3600;
+        } else {
+            current_time += (ihour - t->tm_hour) * 3600;
+        }
+
+        if ((ihour == t->tm_hour) && (iminute < t->tm_min)) {
+            current_time += 24 * 3600;
+        }
+
+        current_time += (t->tm_min - iminute) * 60;
+
+        Event event;
+        event.radio_id = radio.id;
+        event.action = START_RADIO;
+        event.event_time = current_time;
+
+        events.push(event);
+
+        event.action = SEND_QUIT;
+        event.event_time = current_time + interval * 60;
+
+        events.push(event);
+
         return;
     }
 

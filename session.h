@@ -33,7 +33,6 @@ struct Event {
 
 class Radio {
 public:
-    int player_stderr;
     std::string id;
 
     char* host;
@@ -44,6 +43,7 @@ public:
     unsigned long player_port;
     char* player_file;
     char* player_md;
+    int player_stderr;
 
     unsigned short hour;
     unsigned short minute;
@@ -64,6 +64,25 @@ public:
         hour = 0;
         minute = 0;
         interval = 0;
+    }
+
+    Radio(const Radio& radio) {
+        id = radio.id;
+
+        host = strdup(radio.host);
+        port = radio.port;
+
+        player_host = strdup(radio.player_host);
+        player_path = strdup(radio.player_path);
+        player_port = radio.player_port;
+        player_file = strdup(radio.player_file);
+        player_md = strdup(radio.player_md);
+        player_stderr = radio.player_stderr;
+
+        hour = radio.hour;
+        minute = radio.minute;
+        interval = radio.interval;
+
     }
 
     ~Radio() {
@@ -87,7 +106,7 @@ public:
     {
         std::cerr << "##################################" << std::endl;
         std::cerr << "id\t: " << id << std::endl;
-        std::cerr << "post\t: " << host << std::endl;
+        std::cerr << "host\t: " << host << std::endl;
         std::cerr << "port\t: " << port << std::endl;
         std::cerr << "hour\t: " << hour << std::endl;
         std::cerr << "minute\t: " << minute << std::endl;
@@ -111,7 +130,6 @@ public:
     std::string id;
 
     int socket;
-    bool active;
     size_t in_buffer;
     char buffer[30000];
 
@@ -122,8 +140,7 @@ public:
     Session() {
         pthread_mutex_init(&mutex, NULL);
 
-        socket = 0;
-        active = true;
+        socket = -1;
 
         in_buffer = 0;
         memset(&buffer, 0, sizeof(buffer));
@@ -132,9 +149,10 @@ public:
     ~Session() {
         radios.clear();
         radios.shrink_to_fit();
+        poll_sockets.clear();
+        poll_sockets.shrink_to_fit();
 
-        socket = 0;
-        active = false;
+        close(socket);
 
         in_buffer = 0;
         memset(&buffer, 0, sizeof(buffer));
