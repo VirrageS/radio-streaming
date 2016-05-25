@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
@@ -43,19 +44,14 @@ void Session::remove_radio_with_id(std::string id)
         }
     }
 
-    bool check = false;
-    while (!check) {
-        check = true;
-
-        for (auto it = events.begin(); it != events.end(); ++it) {
-            if (it->radio_id == id) {
-                events.erase(it);
-                check = false;
-                break;
-            }
-        }
+    std::priority_queue<Event> tmp_events;
+    for (; events.empty(); events.pop()) {
+        auto event = events.top();
+        if (event.radio_id != id)
+            tmp_events.push(event);
     }
 
+    events = tmp_events;
     pthread_mutex_unlock(&mutex);
 }
 
@@ -261,31 +257,38 @@ void Session::handle_timeout()
     if (events.empty())
         return;
 
-    auto event = events.pop();
-    Radio& radio;
+    auto event = events.top();
+    events.pop();
+
     try {
-        radio = get_radio_by_id(event.radio_id);
+        Radio& radio = get_radio_by_id(event.radio_id);
+
+        switch (event.action) {
+            case START_RADIO:
+                radio.start_radio();
+                add_poll_fd(radio.player_stderr);
+                break;
+            case SEND_QUIT:
+                radio.send_radio_command("QUIT");
+                break;
+            default:
+                break;
+        }
     } catch (std::exception& e) {
         return;
-    }
-
-    switch (event.action) {
-        case START_RADIO:
-            radio.start_radio();
-            add_poll_fd(radio.player_stderr);
-            break;
-        case SEND_QUIT:
-            radio.send_radio_command("QUIT");
-            break;
-        default:
-            break;
     }
 }
 
 void Session::add_poll_fd(int socket)
 {
+    // make socket nonblocking
+    int err = fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
+    if (err < 0) {
+        return;
+    }
+
     pollfd fd;
-    fd.fd = session->socket;
+    fd.fd = socket;
     fd.events = POLLIN | POLLHUP;
 
     poll_sockets.push_back(fd);
@@ -393,31 +396,30 @@ void Session::parse_and_action(char* buffer, size_t end)
             return;
         }
 
-        Radio& radio;
         try {
-            radio = get_radio_by_id(id);
+            Radio& radio = get_radio_by_id(id);
+
+            std::string msg = "OK " + radio.id;
+            if (strcmp(command, "TITLE") == 0) {
+                char buffer[5000];
+                bool received = radio.recv_radio_response(buffer);
+
+                if (!received) {
+                    send_session_message("ERROR: could not reach player\n");//, id);
+                    remove_radio_with_id(radio.id);
+                    return;
+                }
+
+                msg.append(buffer);
+            }
+
+            msg += "\n";
+            send_session_message(msg);
         } catch (const std::exception& e) {
             send_session_message("ERROR: Player with provided 'id' does not exists\n");
             return;
         }
 
-        std::string msg = "OK " + radio.id;
-
-        if (strcmp(command, "TITLE") == 0) {
-            char buffer[5000];
-            bool received = radio.recv_radio_response(buffer);
-
-            if (!received) {
-                send_session_message("ERROR: could not reach player\n");//, id);
-                remove_radio_with_id(radio.id);
-                return;
-            }
-
-            msg.append(buffer);
-        }
-
-        msg += "\n";
-        send_session_message(msg);
         return;
     }
 }

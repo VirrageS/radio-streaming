@@ -2,7 +2,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <fcntl.h>
 
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -164,15 +163,11 @@ int main(int argc, char* argv[])
 
 
     while (true) {
+        int err;
+
         int client_socket = accept(master_socket, NULL, NULL);
         if (client_socket < 0) {
             // syserr("accept() failed");
-        }
-
-        // make socket nonblocking
-        int err = fcntl(client_socket, F_SETFL, fcntl(client_socket, F_GETFL, 0) | O_NONBLOCK);
-        if (err < 0) {
-            // syserr("fcntl() failed");
         }
 
         Session& session = sessions.add_session();
