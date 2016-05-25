@@ -56,5 +56,6 @@ void destroy_sessions(sessions_t *sessions);
 
 
 void parse_and_action(session_t *session, char* buffer, size_t end);
+void remove_session(sessions_t *sessions, session_t *session);
 
 #endif

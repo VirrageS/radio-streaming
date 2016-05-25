@@ -38,12 +38,13 @@ void* handle_session(void *arg)
     while (true) {
         ssize_t bytes_recieved = read(session->socket, &session->buffer[session->in_buffer], sizeof(session->buffer) - session->in_buffer);
 
-        if (bytes_recieved < 0) {
-            syserr("read() failed");
-        } else if (bytes_recieved == 0) {
-            debug_print("%s\n", "connection has ended");
+        if (bytes_recieved <= 0) {
+            break;
         } else {
             session->in_buffer += bytes_recieved;
+
+            debug_print("%s\n", "got something to read");
+            debug_print("message: %s\n", session->buffer);
 
             size_t end = 0;
             for (size_t i = 0; i < session->in_buffer; ++i) {
@@ -67,11 +68,14 @@ void* handle_session(void *arg)
                 parse_and_action(session, tmp_buffer, end);
 
                 free(tmp_buffer);
+
+                session->in_buffer -= end;
                 memset(&session->buffer, 0, end);
             }
         }
     }
 
+    remove_session(&sessions, session);
     debug_print("%s\n", "closing handling session...");
     return 0;
 }

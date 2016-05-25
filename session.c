@@ -13,6 +13,7 @@
 
 #include "session.h"
 #include "err.h"
+#include "misc.h"
 
 static void init_radio(radio_t *radio)
 {
@@ -57,13 +58,33 @@ static void destroy_radio(radio_t *radio)
     init_radio(radio);
 }
 
+static void print_radio(radio_t *radio)
+{
+    if (DEBUG) {
+        printf("##################################\n");
+        printf("id\t: %s\n", radio->id);
+        printf("host\t: %s\n", radio->host);
+        printf("port\t: %lu\n", radio->port);
+        printf("hour\t: %d\n", radio->hour);
+        printf("minute\t: %d\n", radio->minute);
+        printf("interval\t: %d\n", radio->interval);
+        printf("player-host\t: %s\n", radio->player_host);
+        printf("player-path\t: %s\n", radio->player_path);
+        printf("player-path\t: %lu\n", radio->player_port);
+        printf("player-file\t: %s\n", radio->player_file);
+        printf("player-md\t: %s\n", radio->player_md);
+        printf("player-err\t: %d\n", radio->player_stderr);
+        printf("##################################\n");
+    }
+}
+
 
 void init_session(session_t *session)
 {
     if (!session)
         return;
 
-    pthread_mutex_init(&session->mutex , NULL);
+    pthread_mutex_init(&session->mutex, NULL);
 
     session->socket = 0;
     session->active = true;
@@ -225,17 +246,11 @@ bool check_radio(radio_t *radio)
     if (!radio)
         return false;
 
-    // check if stderr is empty
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(radio->player_stderr, &readfds);
-
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-
-    if (select(1, &readfds, NULL, NULL, &timeout)) {
-        return false;
+    if (radio->player_stderr > 0) {
+        char buffer[1000];
+        ssize_t bytes_recieved = read(radio->player_stderr, buffer, sizeof(buffer));
+        if (bytes_recieved > 0)
+            return false;
     }
 
     return true;
@@ -327,8 +342,8 @@ radio_t* add_radio(session_t *session, char *host, unsigned long port,
     while (!check) {
         check = true;
 
+        id = generate_radio_id();
         for (size_t i = 0; i < session->length; ++i) {
-            id = generate_radio_id();
             if (strcmp(session->radios[i].id, id) == 0) {
                 check = false;
                 break;
@@ -350,13 +365,16 @@ radio_t* add_radio(session_t *session, char *host, unsigned long port,
 
     session->length += 1;
     session->radios = realloc(session->radios, session->length * sizeof(radio_t));
+
+    radio_t *tmp_radio = NULL;
     if (session->radios) {
+        // TODO: what if radios are lost
         session->radios[session->length - 1] = radio;
+        tmp_radio = &session->radios[session->length - 1];
     }
 
-
     pthread_mutex_unlock(&session->mutex);
-    return 0;
+    return tmp_radio;
 }
 
 radio_t* get_radio_by_id(session_t *session, char* id)
@@ -410,12 +428,21 @@ static bool start_radio(radio_t *radio)
         );
 
         if (err < 0) {
-            return false;
+            char msg[] = "SSH failed\n";
+            write(err_pipe[1], msg, sizeof(msg));
         }
+
+        _exit(0);
     } else {
         close(err_pipe[1]);
         radio->player_stderr = err_pipe[0];
     }
+
+    // wait for execlp
+    sleep(1);
+
+    if (!check_radio(radio))
+        return false;
 
     return true;
 }
@@ -478,33 +505,36 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     items = sscanf(buffer, "%s %s %s %s %hu %s %hu %s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 8) {
         if (strcmp(command, "START") != 0) {
-            send_session_message(session, "ERROR: Invalid command");
+            send_session_message(session, "ERROR: Invalid command\n");
             return;
         }
 
         if (strcmp(file, "-") == 0) {
-            send_session_message(session, "ERROR: Invalid file name");
+            send_session_message(session, "ERROR: Invalid file name\n");
             return;
         }
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
-            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]");
+            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]\n");
             return;
         }
 
         radio_t *radio = add_radio(session, computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
+        print_radio(radio);
+
         bool started = start_radio(radio);
         if (!started) {
             remove_radio_with_id(session, radio->id);
-            send_session_message(session, "ERROR: ssh failed");
+            send_session_message(session, "ERROR: ssh failed\n");
             return;
         }
 
         char msg[100];
         strcpy(msg, "OK ");
         strcat(msg, radio->id);
+        strcat(msg, "\n");
 
-        send_session_message(session, &msg[0]);
+        send_session_message(session, msg);
         return;
     }
 
@@ -512,29 +542,29 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
     items = sscanf(buffer, "%s %s:%s %u %s %s %s %hu %s %hu %s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
-            send_session_message(session, "ERROR: Invalid command");
+            send_session_message(session, "ERROR: Invalid command\n");
             return;
         }
 
         if ((strlen(hour) != 2) || (strlen(minute) != 2)) {
-            send_session_message(session, "ERROR: Invalid start hour or minute");
+            send_session_message(session, "ERROR: Invalid start hour or minute\n");
             return;
         }
 
         short ihour = ((int)hour[0] * 10) + (int)hour[1];
         short iminute = ((int)minute[0] * 10) + (int)minute[1];
         if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
-            send_session_message(session, "ERROR: Invalid start hour or minute");
+            send_session_message(session, "ERROR: Invalid start hour or minute\n");
             return;
         }
 
         if (strcmp(file, "-") == 0) {
-            send_session_message(session, "ERROR: Invalid file name");
+            send_session_message(session, "ERROR: Invalid file name\n");
             return;
         }
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
-            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]");
+            send_session_message(session, "ERROR: Invalid meta data parameter [yes / no]\n");
             return;
         }
 
@@ -544,14 +574,14 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
         int err = pthread_create(&radio->thread, 0, start_radio_at_time, (void*)radio);
         if (err < 0) {
             remove_radio_with_id(session, radio->id);
-            send_session_message(session, "ERROR: Failed to create player");
+            send_session_message(session, "ERROR: Failed to create player\n");
             return;
         }
 
         err = pthread_detach(radio->thread);
         if (err < 0) {
             remove_radio_with_id(session, radio->id);
-            send_session_message(session, "ERROR: Failed to create player");
+            send_session_message(session, "ERROR: Failed to create player\n");
             return;
         }
 
@@ -566,13 +596,13 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
             (strcmp(command, "PLAY") != 0) &&
             (strcmp(command, "TITLE") != 0) &&
             (strcmp(command, "QUIT") != 0)) {
-            send_session_message(session, "ERROR: Invalid command");
+            send_session_message(session, "ERROR: Invalid command\n");
             return;
         }
 
         radio_t *radio = get_radio_by_id(session, id);
         if (!radio) {
-            send_session_message(session, "ERROR: Player with provided 'id' does not exists");
+            send_session_message(session, "ERROR: Player with provided 'id' does not exists\n");
             return;
         }
 
@@ -584,7 +614,7 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
             char buffer[5000];
             bool received = recv_radio_response(radio, buffer);
             if (!received) {
-                send_session_message(session, "ERROR: could not reach player");//, radio->id);
+                send_session_message(session, "ERROR: could not reach player\n");//, radio->id);
                 remove_radio_with_id(session, radio->id);
                 return;
             }
@@ -592,6 +622,7 @@ void parse_and_action(session_t *session, char* buffer, size_t end)
             strcat(msg, buffer);
         }
 
+        strcat(msg, "\n");
         send_session_message(session, msg);
         return;
     }
