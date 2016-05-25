@@ -1,10 +1,13 @@
 TARGET: master player
 
 CC = gcc
-CFLAGS = -Wall -O2 -std=gnu99 -pedantic-errors -lpthread
+CFLAGS = -Wall -O2 -std=gnu99 -pedantic -pedantic-errors -lpthread
 
-master: master.o err.o misc.o session.o
-	$(CC) $(CFLAGS) $^ -o $@
+CXX = g++
+CXXFLAGS = -Wall -O2 -std=c++0x -pedantic -lpthread
+
+master: master.o session.o
+	$(CXX) $(CXXFLAGS) $^ -o $@
 
 player: player.o header.o misc.o parser.o err.o stream.o
 	$(CC) $(CFLAGS) $^ -o $@
