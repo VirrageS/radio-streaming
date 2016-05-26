@@ -1,5 +1,3 @@
-#include "misc.h"
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -7,6 +5,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "misc.h"
 #include "err.h"
 
 int strtob(bool* b, const char* str)

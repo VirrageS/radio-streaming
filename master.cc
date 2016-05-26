@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 
+#include "err.h"
+#include "misc.h"
 #include "session.h"
 
 int master_socket;
@@ -17,6 +19,7 @@ Sessions sessions;
 
 void clean_all()
 {
+
 }
 
 
@@ -34,14 +37,14 @@ void* handle_session(void *arg)
 
     session->add_poll_fd(session->socket);
 
-    bool end_session = false;
-    while (!end_session) {
+    while (true) {
         debug_print("%s\n", "before poll...");
         int err = poll(session->poll_sockets.data(), (int)session->poll_sockets.size(), session->get_timeout() * 1000);
         debug_print("%s\n", "poll activated...");
 
         if (err < 0) {
-            end_session = true;
+            std::cerr << "poll() failed" << std::endl;
+            goto end_session;
         } else if (err == 0) {
             session->handle_timeout();
         } else {
@@ -51,8 +54,7 @@ void* handle_session(void *arg)
 
                 if (!(descriptor->revents & (POLLIN | POLLHUP))) {
                     debug_print("[ERROR] revents = %d\n", descriptor->revents);
-                    end_session = true;
-                    break;
+                    goto end_session;
                 }
 
                 if (descriptor->fd != session->socket) {
@@ -77,10 +79,11 @@ void* handle_session(void *arg)
                     if (bytes_recieved < 0) {
                         if (errno != EWOULDBLOCK) {
                             std::cerr << "read() in session failed" << std::endl;
-                            end_session = true;
+                            goto end_session;
                         }
                     } else if (bytes_recieved == 0) {
-                        end_session = true;
+                        debug_print("ending %d connection", session->socket);
+                        goto end_session;
                     } else {
                         session->in_buffer += bytes_recieved;
 
@@ -103,12 +106,8 @@ void* handle_session(void *arg)
                         }
 
                         if (end > 0) {
-                            char* tmp_buffer = (char*)malloc(sizeof(char) * (end));
-                            strncpy(tmp_buffer, &session->buffer[0], end);
-
-                            session->parse_and_action(tmp_buffer, end);
-
-                            free(tmp_buffer);
+                            std::string message = std::string(session->buffer, end);
+                            session->parse_and_action(message);
 
                             session->in_buffer -= end;
                             memset(&session->buffer, 0, end);
@@ -121,6 +120,7 @@ void* handle_session(void *arg)
         }
     }
 
+end_session:
     sessions.remove_session(session->id);
     debug_print("%s\n", "closing handling session...");
     return 0;
@@ -135,13 +135,13 @@ void set_master_socket()
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-        // syserr("socket() failed");
+        syserr("socket() failed");
     }
 
     int opt = 1;
     err = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int));
     if (err < 0) {
-        // syserr("setsockopt() failed");
+        syserr("setsockopt() failed");
     }
 
     server.sin_family = AF_INET;
@@ -150,12 +150,12 @@ void set_master_socket()
 
     err = bind(sock, (struct sockaddr*)&server, sizeof(server));
     if (err < 0) {
-        // syserr("bind() failed");
+        syserr("bind() failed");
     }
 
     err = listen(sock, 10);
     if (err < 0) {
-        // syserr("listen() failed");
+        syserr("listen() failed");
     }
 
     master_socket = sock;
@@ -164,7 +164,7 @@ void set_master_socket()
 void validate_parameters(int argc, char* argv[])
 {
     if (argc > 2) {
-        // fatal("Usage ./%s <port>", argv[0]);
+        fatal("Usage ./%s <port>", argv[0]);
     }
 
     master_port = 0;
@@ -174,7 +174,7 @@ void validate_parameters(int argc, char* argv[])
         master_port_str = argv[1];
         long int tmp_port = strtol(master_port_str, NULL, 10);
         if (tmp_port <= 0L) {
-            // fatal("Port (%s) should be number larger than 0.\n", master_port_str);
+            fatal("Port (%s) should be number larger than 0.\n", master_port_str);
         }
         master_port = (uint16_t)tmp_port;
     }
@@ -188,13 +188,12 @@ int main(int argc, char* argv[])
     validate_parameters(argc, argv);
     set_master_socket();
 
-
     while (true) {
         int err;
 
         int client_socket = accept(master_socket, NULL, NULL);
         if (client_socket < 0) {
-            // syserr("accept() failed");
+            syserr("accept() failed");
         }
 
         Session& session = sessions.add_session();
@@ -202,12 +201,14 @@ int main(int argc, char* argv[])
 
         err = pthread_create(&session.thread, 0, handle_session, (void*)&session);
         if (err < 0) {
-            // syserr("pthread_create");
+            sessions.remove_session(session.id);
+            std::cerr << "Failed to establish session" << std::endl;
         }
 
         err = pthread_detach(session.thread);
         if (err < 0) {
-            // syserr("pthread_detach");
+            sessions.remove_session(session.id);
+            std::cerr << "Failed to establish session" << std::endl;
         }
     }
 

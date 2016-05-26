@@ -9,13 +9,13 @@
 #include <queue>
 #include <iostream>
 
-#define debug_print(fmt, ...) \
-        do { if (DEBUG) { fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
-                                __LINE__, __func__, __VA_ARGS__); fflush(stderr); }} while (0)
-
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-#define DEBUG 1
+// #define debug_print(fmt, ...) \
+//         do { if (DEBUG) { fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
+//                                 __LINE__, __func__, __VA_ARGS__); fflush(stderr); }} while (0)
+//
+// #define STR_HELPER(x) #x
+// #define STR(x) STR_HELPER(x)
+// #define DEBUG 1
 
 enum ActionsEnum {
     START_RADIO, SEND_QUIT
@@ -98,9 +98,10 @@ public:
         close(player_stderr);
     }
 
+    bool start_radio();
+
     bool send_radio_command(std::string message);
     bool recv_radio_response(char *buffer);
-    bool start_radio();
 
     void print_radio()
     {
@@ -170,7 +171,7 @@ public:
     int get_timeout();
     void handle_timeout();
 
-    void parse_and_action(char* buffer, size_t end);
+    void parse_and_action(std::string& message);
 };
 
 class Sessions {
@@ -190,19 +191,7 @@ public:
     }
 
     Session& add_session();
-
-    void remove_session(std::string id) {
-        pthread_mutex_lock(&mutex);
-
-        for (auto it = sessions.begin(); it != sessions.end(); ++it) {
-            if (it->id == id) {
-                sessions.erase(it);
-                break;
-            }
-        }
-
-        pthread_mutex_unlock(&mutex);
-    }
+    void remove_session(std::string& id);
 };
 
 #endif
