@@ -88,7 +88,9 @@ bool Radio::send_radio_command(std::string message)
     char msg[1024];
     strcpy(msg, message.c_str());
 
-    struct hostent *found_host = (struct hostent *)gethostbyname(host);
+    struct hostent *server = (struct hostent *)gethostbyname(host);
+    if (!server)
+        return false;
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0)
@@ -99,7 +101,8 @@ bool Radio::send_radio_command(std::string message)
     memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
-    server_address.sin_addr = *((struct in_addr *)found_host->h_addr);
+    server_address.sin_addr = *((struct in_addr *)server->h_addr);
+    bzero(&(server_address.sin_zero), 8);
 
     ssize_t bytes_send = sendto(sock, &msg, strlen(msg), 0, (struct sockaddr *)&server_address, (socklen_t)sizeof(server_address));
     if (bytes_send <= 0) {
@@ -112,7 +115,9 @@ bool Radio::send_radio_command(std::string message)
 
 bool Radio::recv_radio_response(char *buffer)
 {
-    struct hostent *found_host = (struct hostent *)gethostbyname(host);
+    struct hostent *server = (struct hostent *)gethostbyname(host);
+    if (!server)
+        return false;
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0)
@@ -123,7 +128,7 @@ bool Radio::recv_radio_response(char *buffer)
 
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
-    server_address.sin_addr = *((struct in_addr *)found_host->h_addr);
+    server_address.sin_addr = *((struct in_addr *)server->h_addr);
     bzero(&(server_address.sin_zero), 8);
 
     ssize_t bytes_recieved = recvfrom(sock, &buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
@@ -263,13 +268,20 @@ void Session::parse_and_action(std::string message)
         try {
             Radio& radio = get_radio_by_id(id);
 
+            bool sent = radio.send_radio_command(std::string(command));
+            if (!sent) {
+                send_session_message("ERROR " + radio.id + ": could not send command to player. Probably not reachable.\n");
+                remove_radio_with_id(radio.id);
+                return;
+            }
+
             std::string msg = "OK " + radio.id;
             if (strcmp(command, "TITLE") == 0) {
                 char buffer[5000];
                 bool received = radio.recv_radio_response(buffer);
 
                 if (!received) {
-                    send_session_message("ERROR: could not reach player\n");//, id);
+                    send_session_message("ERROR " + radio.id + ": could not reach player\n");
                     remove_radio_with_id(radio.id);
                     return;
                 }
@@ -277,10 +289,14 @@ void Session::parse_and_action(std::string message)
                 msg.append(buffer);
             }
 
+            if (strcmp(command, "QUIT") == 0) {
+                remove_radio_with_id(radio.id);
+            }
+
             msg += "\n";
             send_session_message(msg);
         } catch (const std::exception& e) {
-            send_session_message("ERROR: Player with provided 'id' does not exists\n");
+            send_session_message("ERROR: Player with provided [id] does not exists\n");
             return;
         }
 
@@ -344,6 +360,14 @@ void Session::remove_radio_with_id(std::string id)
 
     for (auto it = radios.begin(); it != radios.end(); ++it) {
         if (it->id == id) {
+            // remove stderr socket from poll sockets (if exists)
+            for (auto itt = poll_sockets.begin(); itt != poll_sockets.end(); ++itt) {
+                if (it->player_stderr == itt->fd) {
+                    poll_sockets.erase(itt);
+                    break;
+                }
+            }
+
             radios.erase(it);
             break;
         }
@@ -355,8 +379,8 @@ void Session::remove_radio_with_id(std::string id)
         if (event.radio_id != id)
             tmp_events.push(event);
     }
-
     events = tmp_events;
+
     pthread_mutex_unlock(&mutex);
 }
 

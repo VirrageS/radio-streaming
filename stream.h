@@ -7,7 +7,7 @@
 
 #include "header.h"
 
-#define MAX_BUFFER 5000
+#define MAX_BUFFER 100000
 #define MAX_METADATA_LENGTH 5000
 
 typedef struct {

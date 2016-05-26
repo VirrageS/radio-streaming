@@ -67,7 +67,7 @@ void* handle_session(void *arg)
 
                     for (auto radio : session->radios) {
                         if (radio.player_stderr == descriptor->fd) {
-                            std::string msg = "ERROR " + radio.id + ": " + buffer;
+                            std::string msg = "ERROR " + radio.id + ": " + buffer + "\n";
 
                             session->send_session_message(msg);
                             session->remove_radio_with_id(radio.id);
@@ -187,6 +187,8 @@ int main(int argc, char* argv[])
 {
     signal(SIGINT, handle_signal);
     signal(SIGKILL, handle_signal);
+
+    srand(time(NULL));
 
     validate_parameters(argc, argv);
     set_master_socket();
