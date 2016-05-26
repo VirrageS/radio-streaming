@@ -5,6 +5,10 @@
 
 #include "stream.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define debug_print(fmt, ...) \
         do { if (DEBUG) { fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
                                 __LINE__, __func__, __VA_ARGS__); fflush(stderr); }} while (0)
@@ -16,5 +20,10 @@
 int strtob(bool* b, const char* str);
 int write_to_file(stream_t *stream, size_t bytes_count);
 int remove_from_buffer(stream_t *stream, size_t bytes_count);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

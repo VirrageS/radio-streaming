@@ -158,7 +158,7 @@ void Session::parse_and_action(std::string& message)
     unsigned int interval;
 
     // "START" COMMAND
-    items = sscanf(message, "%s %s %s %s %hu %s %hu %s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%s %s %s %s %hu %s %hu %s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 8) {
         if (strcmp(command, "START") != 0) {
             send_session_message("ERROR: Invalid command\n");
@@ -187,7 +187,7 @@ void Session::parse_and_action(std::string& message)
     }
 
     // "AT" COMMAND
-    items = sscanf(message, "%s %s:%s %u %s %s %s %hu %s %hu %s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%s %s:%s %u %s %s %s %hu %s %hu %s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
             send_session_message("ERROR: Invalid command\n");
@@ -250,7 +250,7 @@ void Session::parse_and_action(std::string& message)
     }
 
     // PLAYER COMMANDS
-    items = sscanf(message, "%s %s", command, id);
+    items = sscanf(message.c_str(), "%s %s", command, id);
     if (items == 2) {
         // check if any command matches
         if ((strcmp(command, "PAUSE") != 0) &&
