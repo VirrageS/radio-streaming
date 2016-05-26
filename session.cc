@@ -141,7 +141,7 @@ bool Radio::recv_radio_response(char *buffer)
 ********************
 **/
 
-void Session::parse_and_action(std::string& message)
+void Session::parse_and_action(std::string message)
 {
     while ((message.length() > 0) && (isspace(message.front()) || (message.front() == '\r') || (message.front() == '\n')))
         message.erase(message.begin());
@@ -149,19 +149,18 @@ void Session::parse_and_action(std::string& message)
     while ((message.length() > 0) && (isspace(message.back()) || (message.back() == '\r') || (message.back() == '\n')))
         message.pop_back();
 
-
     int items;
 
     // PARSE COMMAND
-    char command[10], hour[4], minute[4], computer[256], host[256], path[2048], file[256], meta_data[4], id[256];
+    char command[10], hour[3], minute[3], computer[4096], host[4096], path[4096], file[256], meta_data[4], id[256];
     unsigned short resource_port, listen_port;
     unsigned int interval;
 
     // "START" COMMAND
-    items = sscanf(message.c_str(), "%s %s %s %s %hu %s %hu %s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%9s %4095s %4095s %4095s %hu %255s %hu %3s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 8) {
         if (strcmp(command, "START") != 0) {
-            send_session_message("ERROR: Invalid command\n");
+            send_session_message("ERROR: Invalid START command\n");
             return;
         }
 
@@ -187,10 +186,10 @@ void Session::parse_and_action(std::string& message)
     }
 
     // "AT" COMMAND
-    items = sscanf(message.c_str(), "%s %s:%s %u %s %s %s %hu %s %hu %s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%9s %2s:%2s %u %4095s %4095s %4095s %hu %255s %hu %3s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
-            send_session_message("ERROR: Invalid command\n");
+            send_session_message("ERROR: Invalid AT command\n");
             return;
         }
 
@@ -250,7 +249,7 @@ void Session::parse_and_action(std::string& message)
     }
 
     // PLAYER COMMANDS
-    items = sscanf(message.c_str(), "%s %s", command, id);
+    items = sscanf(message.c_str(), "%9s %255s", command, id);
     if (items == 2) {
         // check if any command matches
         if ((strcmp(command, "PAUSE") != 0) &&
@@ -287,6 +286,9 @@ void Session::parse_and_action(std::string& message)
 
         return;
     }
+
+    send_session_message("ERROR: Invalid command\n");
+    return;
 }
 
 

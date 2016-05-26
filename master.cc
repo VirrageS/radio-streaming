@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 
+#include <signal.h>
+
 #include "err.h"
 #include "misc.h"
 #include "session.h"
@@ -107,6 +109,7 @@ void* handle_session(void *arg)
 
                         if (end > 0) {
                             std::string message = std::string(session->buffer, end);
+
                             session->parse_and_action(message);
 
                             session->in_buffer -= end;

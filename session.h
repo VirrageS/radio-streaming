@@ -9,14 +9,6 @@
 #include <queue>
 #include <iostream>
 
-// #define debug_print(fmt, ...) \
-//         do { if (DEBUG) { fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
-//                                 __LINE__, __func__, __VA_ARGS__); fflush(stderr); }} while (0)
-//
-// #define STR_HELPER(x) #x
-// #define STR(x) STR_HELPER(x)
-// #define DEBUG 1
-
 enum ActionsEnum {
     START_RADIO, SEND_QUIT
 };
@@ -171,7 +163,7 @@ public:
     int get_timeout();
     void handle_timeout();
 
-    void parse_and_action(std::string& message);
+    void parse_and_action(std::string message);
 };
 
 class Sessions {
