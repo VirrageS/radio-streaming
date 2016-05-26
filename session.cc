@@ -216,15 +216,17 @@ bool Radio::start_radio()
         close(err_pipe[0]);
         dup2(err_pipe[1], 2);
 
-        // TODO: all have to be chars
+        std::string pport = std::to_string(player_port);
+        std::string p = std::to_string(port);
+
         int err = execlp(
             "ssh", "ssh", host,
             "./player",
                 player_host,
                 player_path,
-                player_port,
+                pport.c_str(),
                 player_file,
-                port,
+                p.c_str(),
                 player_md,
             NULL
         );
