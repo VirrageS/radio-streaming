@@ -74,8 +74,6 @@ void* handle_session(void *arg)
                             break;
                         }
                     }
-
-                    session->poll_sockets.erase(descriptor);
                 } else {
                     ssize_t bytes_recieved = read(session->socket, &session->buffer[session->in_buffer], sizeof(session->buffer) - session->in_buffer);
                     if (bytes_recieved < 0) {
