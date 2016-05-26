@@ -40,6 +40,57 @@ static std::string generate_id()
 ********************
 **/
 
+Radio::Radio()
+{
+    m_playerStderr = -1;
+
+    m_host = NULL;
+    m_port = 0;
+
+    m_playerHost = NULL;
+    m_playerPath = NULL;
+    m_playerPort = 0;
+    m_playerFile = NULL;
+    m_playerMeta = NULL;
+
+    m_hour = 0;
+    m_minute = 0;
+    m_interval = 0;
+}
+
+
+Radio::Radio(const Radio& radio)
+{
+    m_id = radio.m_id;
+
+    m_host = strdup(radio.m_host);
+    m_port = radio.m_port;
+
+    m_playerHost = strdup(radio.m_playerHost);
+    m_playerPath = strdup(radio.m_playerPath);
+    m_playerPort = radio.m_playerPort;
+    m_playerFile = strdup(radio.m_playerFile);
+    m_playerMeta = strdup(radio.m_playerMeta);
+    m_playerStderr = radio.m_playerStderr;
+
+    m_hour = radio.m_hour;
+    m_minute = radio.m_minute;
+    m_interval = radio.m_interval;
+
+}
+
+Radio::~Radio()
+{
+    free(m_host);
+
+    free(m_playerHost);
+    free(m_playerPath);
+    free(m_playerFile);
+    free(m_playerMeta);
+
+    close(m_playerStderr);
+}
+
 
 bool Radio::start_radio()
 {
@@ -85,8 +136,7 @@ bool Radio::start_radio()
 
 bool Radio::send_radio_command(std::string message)
 {
-    char msg[1024];
-    strcpy(msg, message.c_str());
+    auto msg = message.c_str();
 
     struct hostent *server = (struct hostent *)gethostbyname(m_host);
     if (!server)
@@ -104,7 +154,7 @@ bool Radio::send_radio_command(std::string message)
     server_address.sin_addr = *((struct in_addr *)server->h_addr);
     bzero(&(server_address.sin_zero), 8);
 
-    ssize_t bytes_send = sendto(sock, &msg, strlen(msg), 0, (struct sockaddr *)&server_address, (socklen_t)sizeof(server_address));
+    ssize_t bytes_send = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&server_address, (socklen_t)sizeof(server_address));
     if (bytes_send <= 0) {
         return false;
     }
@@ -131,7 +181,7 @@ bool Radio::recv_radio_response(char *buffer)
     server_address.sin_addr = *((struct in_addr *)server->h_addr);
     bzero(&(server_address.sin_zero), 8);
 
-    ssize_t bytes_recieved = recvfrom(sock, &buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
+    ssize_t bytes_recieved = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
     if (bytes_recieved <= 0) {
         return false;
     }
@@ -174,8 +224,7 @@ void Session::parse(std::string message)
             return;
         }
 
-        Radio r = Radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
-        Radio& radio = add_radio(r);
+        Radio& radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
 
         bool started = radio.start_radio();
         if (!started) {
@@ -184,7 +233,7 @@ void Session::parse(std::string message)
             return;
         }
 
-        add_poll_fd(radio.playerStderr());
+        add_poll_fd(radio.player_stderr());
 
         std::string msg = "OK " + radio.id() + "\n";
         send_session_message(msg);
@@ -221,8 +270,7 @@ void Session::parse(std::string message)
             return;
         }
 
-        Radio r = Radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
-        Radio& radio = add_radio(r);
+        Radio& radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
 
         time_t current_time = time(NULL);
         auto t = localtime(&current_time);
@@ -309,9 +357,15 @@ void Session::parse(std::string message)
 }
 
 
-Radio& Session::add_radio(Radio& radio)
+Radio& Session::add_radio(char *host, unsigned long port,
+                          unsigned short hour, unsigned short minute,
+                          unsigned int interval, char *player_host,
+                          char *player_path, unsigned long player_port,
+                          char *player_file, char *player_md)
 {
     bool check = false;
+
+    Radio radio;
 
     while (!check) {
         check = true;
@@ -324,6 +378,18 @@ Radio& Session::add_radio(Radio& radio)
             }
         }
     }
+
+
+    radio.m_host = (char *)strdup(host);
+    radio.m_port = port;
+    radio.m_hour = hour;
+    radio.m_minute = minute;
+    radio.m_interval = interval;
+    radio.m_playerHost = (char *)strdup(player_host);
+    radio.m_playerPath = (char *)strdup(player_path);
+    radio.m_playerPort = player_port;
+    radio.m_playerFile = (char *)strdup(player_file);
+    radio.m_playerMeta = (char *)strdup(player_md);
 
     m_radios.push_back(radio);
     return m_radios.back();
@@ -348,7 +414,7 @@ void Session::remove_radio_by_id(const std::string& id)
         if (it->id() == id) {
             // remove stderr socket from poll sockets (if exists)
             for (auto itt = m_pollSockets.begin(); itt != m_pollSockets.end(); ++itt) {
-                if (it->playerStderr() == itt->fd) {
+                if (it->player_stderr() == itt->fd) {
                     m_pollSockets.erase(itt);
                     break;
                 }
@@ -373,8 +439,7 @@ void Session::remove_radio_by_id(const std::string& id)
 
 bool Session::send_session_message(const std::string& message) const
 {
-    char msg[1024];
-    strcpy(msg, message.c_str());
+    auto msg = message.c_str();
 
     size_t to_sent = 0;
     while (true) {
@@ -396,19 +461,21 @@ bool Session::send_session_message(const std::string& message) const
 }
 
 
-void Session::add_poll_fd(int socket)
+bool Session::add_poll_fd(int socket)
 {
     // make socket nonblocking
     int err = fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
     if (err < 0) {
-        return;
+        return false;
     }
 
     pollfd fd;
     fd.fd = socket;
-    fd.events = POLLIN | POLLHUP;
+    fd.events = POLLIN;
 
     m_pollSockets.push_back(fd);
+
+    return true;
 }
 
 
@@ -438,7 +505,7 @@ void Session::handle_timeout()
         switch (event.action) {
             case START_RADIO:
                 radio.start_radio();
-                add_poll_fd(radio.playerStderr());
+                add_poll_fd(radio.player_stderr());
                 break;
             case SEND_QUIT:
                 radio.send_radio_command("QUIT");
@@ -458,8 +525,11 @@ void Session::handle_timeout()
 ********************
 **/
 
-Session& Sessions::add_session(Session& session) {
+Session& Sessions::add_session()
+{
     pthread_mutex_lock(&m_mutex);
+
+    Session session;
 
     bool check = false;
     while (!check) {
@@ -479,7 +549,6 @@ Session& Sessions::add_session(Session& session) {
     Session& s = m_sessions.back();
 
     pthread_mutex_unlock(&m_mutex);
-
     return s;
 }
 

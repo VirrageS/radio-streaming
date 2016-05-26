@@ -15,7 +15,7 @@ extern "C" {
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
-#define DEBUG 0
+#define DEBUG 1
 
 int strtob(bool* b, const char* str);
 int write_to_file(stream_t *stream, size_t bytes_count);

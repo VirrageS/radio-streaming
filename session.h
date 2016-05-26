@@ -25,77 +25,30 @@ struct Event {
 
 class Radio {
 public:
-    Radio()
-    {
-        m_playerStderr = -1;
+    int m_playerStderr;
 
-        m_host = NULL;
-        m_port = 0;
+    char* m_host;
+    unsigned long m_port;
 
-        m_playerHost = NULL;
-        m_playerPath = NULL;
-        m_playerPort = 0;
-        m_playerFile = NULL;
-        m_playerMeta = NULL;
+    char* m_playerHost;
+    char* m_playerPath;
+    unsigned long m_playerPort;
+    char* m_playerFile;
+    char* m_playerMeta;
 
-        m_hour = 0;
-        m_minute = 0;
-        m_interval = 0;
-    }
+    unsigned short m_hour;
+    unsigned short m_minute;
+    unsigned int m_interval;
 
-    Radio(char *host, unsigned long port,
-          unsigned short hour, unsigned short minute, unsigned int interval,
-          char *player_host, char *player_path, unsigned long player_port,
-          char *player_file, char *player_md)
-    {
-        m_host = (char *)strdup(host);
-        m_port = port;
-        m_hour = hour;
-        m_minute = minute;
-        m_interval = interval;
-        m_playerHost = (char *)strdup(player_host);
-        m_playerPath = (char *)strdup(player_path);
-        m_playerPort = player_port;
-        m_playerFile = (char *)strdup(player_file);
-        m_playerMeta = (char *)strdup(player_md);
-    }
-
-    Radio(const Radio& radio)
-    {
-        m_id = radio.m_id;
-
-        m_host = strdup(radio.m_host);
-        m_port = radio.m_port;
-
-        m_playerHost = strdup(radio.m_playerHost);
-        m_playerPath = strdup(radio.m_playerPath);
-        m_playerPort = radio.m_playerPort;
-        m_playerFile = strdup(radio.m_playerFile);
-        m_playerMeta = strdup(radio.m_playerMeta);
-        m_playerStderr = radio.m_playerStderr;
-
-        m_hour = radio.m_hour;
-        m_minute = radio.m_minute;
-        m_interval = radio.m_interval;
-
-    }
-
-    ~Radio() {
-        free(m_host);
-
-        free(m_playerHost);
-        free(m_playerPath);
-        free(m_playerFile);
-        free(m_playerMeta);
-
-        close(m_playerStderr);
-    }
+    Radio();
+    Radio(const Radio& radio);
+    ~Radio();
 
     std::string id() const { return m_id; }
     void id(const std::string& id) { m_id = id; }
 
-    int playerStderr() const { return m_playerStderr; }
-    void playerStderr(int player_stderr) { m_playerStderr = player_stderr; }
+    int player_stderr() const { return m_playerStderr; }
+    void player_stderr(int player_stderr) { m_playerStderr = player_stderr; }
 
     bool start_radio();
 
@@ -123,55 +76,50 @@ public:
 
 private:
     std::string m_id;
-    int m_playerStderr;
-
-    char* m_host;
-    unsigned long m_port;
-
-    char* m_playerHost;
-    char* m_playerPath;
-    unsigned long m_playerPort;
-    char* m_playerFile;
-    char* m_playerMeta;
-
-    unsigned short m_hour;
-    unsigned short m_minute;
-    unsigned int m_interval;
 };
 
 class Session {
 public:
-
     pthread_t m_thread;
 
     size_t in_buffer;
     char buffer[30000];
 
-    Session() {
+    Session()
+    {
         m_socket = -1;
 
         in_buffer = 0;
         memset(&buffer, 0, sizeof(buffer));
     }
 
-    Session(int socket)
+    Session(int socket) : Session()
     {
         m_socket = socket;
-
-        in_buffer = 0;
-        memset(&buffer, 0, sizeof(buffer));
     }
 
-    ~Session() {
+    Session(const Session& session)
+    {
+        m_id = session.m_id;
+        memcpy(&m_thread, &session.m_thread, sizeof(m_thread));
+        m_socket = session.m_socket;
+
+        in_buffer = session.in_buffer;
+        memcpy(buffer, session.buffer, sizeof(session.buffer));
+
+        m_radios = session.m_radios;
+        m_events = session.m_events;
+        m_pollSockets = session.m_pollSockets;
+    }
+
+    ~Session()
+    {
         m_radios.clear();
         m_radios.shrink_to_fit();
         m_pollSockets.clear();
         m_pollSockets.shrink_to_fit();
 
         close(m_socket);
-
-        in_buffer = 0;
-        memset(&buffer, 0, sizeof(buffer));
     }
 
     std::string id() const { return m_id; }
@@ -181,9 +129,13 @@ public:
     void socket(int socket) { m_socket = socket; }
 
     std::vector<Radio> radios() { return m_radios; }
-    std::vector<pollfd> pollSockets() { return m_pollSockets; }
+    std::vector<pollfd>& poll_sockets() { return m_pollSockets; }
 
-    Radio& add_radio(Radio& radio);
+    Radio& add_radio(char *host, unsigned long port, unsigned short hour,
+                     unsigned short minute, unsigned int interval,
+                     char *player_host, char *player_path,
+                     unsigned long player_port, char *player_file,
+                     char *player_md);
 
     /**
         Return radio with provided `id` or throws RadioNotFoundException
@@ -199,7 +151,7 @@ public:
 
     bool send_session_message(const std::string& message) const;
 
-    void add_poll_fd(int socket);
+    bool add_poll_fd(int socket);
     int get_timeout() const;
     void handle_timeout();
 
@@ -221,9 +173,6 @@ private:
 
 class Sessions {
 public:
-    pthread_mutex_t m_mutex;
-    std::vector<Session> m_sessions;
-
     Sessions() {
         pthread_mutex_init(&m_mutex, NULL);
     }
@@ -240,7 +189,7 @@ public:
 
         @returns: New created session.
         **/
-    Session& add_session(Session& session);
+    Session& add_session();
 
     /**
         Remove sessions with `id`.
@@ -248,6 +197,10 @@ public:
         @param id: ID of session which has to be deleted.
         **/
     void remove_session_by_id(const std::string& id);
+
+private:
+    pthread_mutex_t m_mutex;
+    std::vector<Session> m_sessions;
 };
 
 #endif

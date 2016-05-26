@@ -38,21 +38,24 @@ void handle_signal(int sig)
 void* handle_session(void *arg)
 {
     Session *session = (Session*)(arg);
-    debug_print("%s\n", "started handling session...");
+    debug_print("[%s] started handling session...\n", session->id().c_str());
 
-    session->add_poll_fd(session->socket());
+    bool added = session->add_poll_fd(session->socket());
+    if (!added) {
+        goto end_session;
+    }
 
     while (true) {
-        debug_print("%s\n", "before poll...");
-        auto sockets = session->pollSockets();
+        debug_print("[%s] before poll %d...\n", session->id().c_str(), session->socket());
 
+        auto sockets = session->poll_sockets();
         int err = poll(sockets.data(), (int)sockets.size(), session->get_timeout() * 1000);
-        debug_print("%s\n", "poll activated...");
 
         if (err < 0) {
             std::cerr << "poll() failed" << std::endl;
             goto end_session;
         } else if (err == 0) {
+            debug_print("[%s] handling timeout...\n", session->id().c_str());
             session->handle_timeout();
         } else {
             for (auto descriptor = sockets.begin(); descriptor != sockets.end(); ++descriptor) {
@@ -60,7 +63,7 @@ void* handle_session(void *arg)
                     continue;
 
                 if (!(descriptor->revents & (POLLIN | POLLHUP))) {
-                    std::cerr << "unexpected revents" << std::endl;
+                    std::cerr << "unexpected revents - " << descriptor->revents << std::endl;
                     goto end_session;
                 }
 
@@ -71,7 +74,7 @@ void* handle_session(void *arg)
                     read(descriptor->fd, buffer, sizeof(buffer));
 
                     for (auto radio : session->radios()) {
-                        if (radio.playerStderr() == descriptor->fd) {
+                        if (radio.player_stderr() == descriptor->fd) {
                             std::string msg = "ERROR " + radio.id() + ": " + buffer + "\n";
 
                             session->send_session_message(msg);
@@ -126,8 +129,8 @@ void* handle_session(void *arg)
     }
 
 end_session:
+    debug_print("[%s] closing handling session...\n", session->id().c_str());
     sessions.remove_session_by_id(session->id());
-    debug_print("%s\n", "closing handling session...");
     return 0;
 }
 
@@ -204,8 +207,8 @@ int main(int argc, char* argv[])
             syserr("accept() failed");
         }
 
-        Session s = Session(client_socket);
-        Session& session = sessions.add_session(s);
+        Session& session = sessions.add_session();
+        session.socket(client_socket);
 
         err = pthread_create(&session.m_thread, 0, handle_session, (void*)&session);
         if (err < 0) {
