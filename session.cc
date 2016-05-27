@@ -239,6 +239,7 @@ void Session::parse(std::string message)
             return;
         }
 
+        debug_print("time [%s:%s]\n", hour, minute);
         if ((strlen(hour) != 2) || (strlen(minute) != 2)) {
             send_session_message("ERROR: Invalid start hour or minute\n");
             return;
@@ -246,6 +247,8 @@ void Session::parse(std::string message)
 
         short ihour = ((int)hour[0] * 10) + (int)hour[1];
         short iminute = ((int)minute[0] * 10) + (int)minute[1];
+
+        debug_print("time [%d:%d]\n", ihour, iminute);
         if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
             send_session_message("ERROR: Invalid start hour or minute\n");
             return;
@@ -279,6 +282,8 @@ void Session::parse(std::string message)
 
         current_time += (t->tm_min - iminute) * 60;
 
+        debug_print("current %d; starts at: %d\n", time(NULL), current_time);
+
         Event event;
         event.radio_id = radio->id();
         event.action = START_RADIO;
@@ -287,7 +292,7 @@ void Session::parse(std::string message)
         m_events.push(event);
 
         event.action = SEND_QUIT;
-        event.event_time = current_time + interval * 60;
+        event.event_time = current_time + (interval * 60);
 
         m_events.push(event);
 
@@ -359,7 +364,8 @@ std::shared_ptr<Radio> Session::add_radio(const char *host, unsigned long port,
 
     std::shared_ptr<Radio> radio = std::make_shared<Radio>(
         host, port, hour, minute, interval, player_host, player_path,
-        player_port, player_file, player_md);
+        player_port, player_file, player_md
+    );
 
     while (!check) {
         check = true;
@@ -398,7 +404,6 @@ void Session::remove_radio_by_id(const std::string& id)
             // remove stderr socket from poll sockets (if exists)
             for (auto itt = m_pollSockets.begin(); itt != m_pollSockets.end(); ++itt) {
                 if (it->get()->player_stderr() == itt->fd) {
-                    std::cerr << id << " - " << it->get()->player_stderr() << std::endl;
                     m_pollSockets.erase(itt);
                     break;
                 }
