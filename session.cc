@@ -241,7 +241,6 @@ void Session::parse(std::string message)
             return;
         }
 
-        debug_print("time [%s:%s]\n", hour, minute);
         if ((strlen(hour) != 2) || (strlen(minute) != 2)) {
             send_session_message("ERROR: Invalid start hour or minute\n");
             return;
@@ -249,8 +248,6 @@ void Session::parse(std::string message)
 
         short ihour = (((int)hour[0] - 48) * 10) + ((int)hour[1] - 48);
         short iminute = (((int)minute[0] - 48) * 10) + ((int)minute[1] - 48);
-
-        debug_print("time [%d:%d]\n", ihour, iminute);
         if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
             send_session_message("ERROR: Invalid start hour or minute\n");
             return;
@@ -497,6 +494,7 @@ void Session::handle_timeout()
             }
         } else if (event.action == SEND_QUIT) {
             radio->send_radio_command("QUIT");
+            remove_radio_by_id(radio->id());
         }
     } catch (std::exception& e) {
         return;
