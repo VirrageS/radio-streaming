@@ -150,7 +150,7 @@ public:
     bool send_session_message(const std::string& message) const;
 
     bool add_poll_fd(int socket);
-    int get_timeout() const;
+    unsigned int get_timeout() const;
     void handle_timeout();
 
     /**

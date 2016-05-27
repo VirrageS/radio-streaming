@@ -12,6 +12,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include <algorithm>
+
 #include "session.h"
 
 class RadioNotFoundException: public std::exception
@@ -270,17 +272,12 @@ void Session::parse(std::string message)
         time_t current_time = time(NULL);
         auto t = localtime(&current_time);
 
-        if (ihour < t->tm_hour) {
-            current_time += (24 - t->tm_hour + ihour) * 3600;
-        } else {
-            current_time += (ihour - t->tm_hour) * 3600;
-        }
-
-        if ((ihour == t->tm_hour) && (iminute < t->tm_min)) {
+        if ((ihour < t->tm_hour) || ((ihour == t->tm_hour) && (iminute < t->tm_min))) {
             current_time += 24 * 3600;
         }
 
-        current_time += (t->tm_min - iminute) * 60;
+        current_time += (ihour - t->tm_hour) * 3600;
+        current_time += (iminute - t->tm_min) * 60;
 
         debug_print("current %ld; starts at: %ld\n", time(NULL), current_time);
 
@@ -468,7 +465,7 @@ bool Session::add_poll_fd(int socket)
 }
 
 
-int Session::get_timeout() const
+unsigned int Session::get_timeout() const
 {
     if (m_events.empty())
         return 1000000; // 10 ^ 6
@@ -476,7 +473,7 @@ int Session::get_timeout() const
     auto event = m_events.top();
     time_t current_time = time(NULL);
 
-    return event.event_time - current_time;
+    return std::max((long)0, (long)(event.event_time - current_time));
 }
 
 
