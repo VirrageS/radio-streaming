@@ -44,7 +44,7 @@ void handle_session(std::shared_ptr<Session> session)
     }
 
     while (true) {
-        debug_print("[%s] before poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
+        debug_print("[%s] before poll [%d - %lu]... timeout in %u...\n", session->id().c_str(), session->socket(), session->poll_sockets().size(), session->get_timeout());
         int err = poll(session->poll_sockets().data(), (int)session->poll_sockets().size(), session->get_timeout() * 1000);
         debug_print("[%s] after poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
 
