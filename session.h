@@ -25,7 +25,7 @@ struct Event {
     time_t event_time;
 
     bool operator<(const Event& event) const {
-        return event_time < event.event_time;
+        return event_time >= event.event_time;
     }
 };
 
