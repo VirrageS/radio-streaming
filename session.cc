@@ -56,7 +56,7 @@ Radio::Radio()
 Radio::Radio(const char *host, unsigned long port, unsigned short hour,
              unsigned short minute, unsigned int interval, const char *player_host,
              const char *player_path, unsigned long player_port, const char *player_file,
-             const char *player_md)
+             const char *player_md) : Radio()
 {
     m_host = std::string(host);
     m_port = port;
@@ -168,9 +168,18 @@ bool Radio::recv_radio_response(char *buffer)
     server_address.sin_addr = *((struct in_addr *)server->h_addr);
     bzero(&(server_address.sin_zero), 8);
 
-    ssize_t bytes_recieved = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
-    if (bytes_recieved <= 0) {
+
+    struct pollfd poll_socket[1];
+    poll_socket[0].fd = sock;
+    poll_socket[0].events = POLLIN | POLLHUP;
+
+    int err = poll(poll_socket, 1, 5000);
+    if (err <= 0) {
         return false;
+    } else {
+        ssize_t bytes_recieved = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
+        if (bytes_recieved <= 0)
+            return false;
     }
 
     return true;
@@ -316,16 +325,18 @@ void Session::parse(std::string message)
             }
 
             std::string msg = "OK " + radio->id();
+
             if (strcmp(command, "TITLE") == 0) {
                 char buffer[5000];
                 bool received = radio->recv_radio_response(buffer);
 
                 if (!received) {
-                    send_session_message("ERROR " + radio->id() + ": could not reach player\n");
-                    remove_radio_by_id(radio->id());
+                    send_session_message("ERROR " + radio->id() + ": title command timeout\n");
+                    // remove_radio_by_id(radio->id());
                     return;
                 }
 
+                msg += ": ";
                 msg.append(buffer);
             }
 
