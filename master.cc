@@ -46,7 +46,7 @@ void handle_session(Session *session)
     while (true) {
         debug_print("[%s] before poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
         int err = poll(session->poll_sockets().data(), (int)session->poll_sockets().size(), session->get_timeout() * 1000);
-        debug_print("%s\n", "poll active");
+        debug_print("[%s] after poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
 
         if (err < 0) {
             std::cerr << "poll() failed" << std::endl;
@@ -69,6 +69,8 @@ void handle_session(Session *session)
                     // so we should delete this
                     char buffer[1024];
                     read(descriptor->fd, buffer, sizeof(buffer));
+
+                    debug_print("%s\n", "got something on player stderr");
 
                     for (auto radio : session->radios()) {
                         if (radio.player_stderr() == descriptor->fd) {
