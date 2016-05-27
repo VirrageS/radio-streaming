@@ -225,6 +225,7 @@ void Session::parse(std::string message)
         }
 
         Radio& radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
+        radio.print_radio();
 
         bool started = radio.start_radio();
         if (!started) {
@@ -271,6 +272,7 @@ void Session::parse(std::string message)
         }
 
         Radio& radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
+        radio.print_radio();
 
         time_t current_time = time(NULL);
         auto t = localtime(&current_time);
@@ -379,7 +381,6 @@ Radio& Session::add_radio(char *host, unsigned long port,
         }
     }
 
-
     radio.m_host = (char *)strdup(host);
     radio.m_port = port;
     radio.m_hour = hour;
@@ -392,7 +393,8 @@ Radio& Session::add_radio(char *host, unsigned long port,
     radio.m_playerMeta = (char *)strdup(player_md);
 
     m_radios.push_back(radio);
-    return m_radios.back();
+    Radio& r = m_radios.back();
+    return r;
 }
 
 

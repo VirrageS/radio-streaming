@@ -98,20 +98,6 @@ public:
         m_socket = socket;
     }
 
-    Session(const Session& session)
-    {
-        m_id = session.m_id;
-        memcpy(&m_thread, &session.m_thread, sizeof(m_thread));
-        m_socket = session.m_socket;
-
-        in_buffer = session.in_buffer;
-        memcpy(buffer, session.buffer, sizeof(session.buffer));
-
-        m_radios = session.m_radios;
-        m_events = session.m_events;
-        m_pollSockets = session.m_pollSockets;
-    }
-
     ~Session()
     {
         m_radios.clear();
