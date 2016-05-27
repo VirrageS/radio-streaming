@@ -13,12 +13,11 @@ int parse_header(stream_t *stream)
     debug_print("%s\n", "parsing header...");
     while (true) {
         debug_print("socket: %d; buffer_size: %zu\n", stream->socket, sizeof(stream->buffer) - stream->in_buffer);
-        ssize_t bytes_received = recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer, 0);
+        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
         if (bytes_received < 0) {
-            syserr("recv() failed");
+            syserr("poll_recv() failed");
         } else if (bytes_received == 0) {
-            // syserr("recv(): connection closed");
-            debug_print("%s\n", "not recieving anything (header)...");
+            syserr("poll_recv() connection closed");
         } else {
             int parse_point = -1;
             stream->in_buffer += bytes_received;
@@ -74,10 +73,11 @@ int check_metadata(stream_t *stream)
 
     // if there is not enough data in buffer we should read more...
     while (metadata_length > stream->in_buffer) {
-        ssize_t bytes_received = recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer, 0);
+        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
         if (bytes_received < 0) {
-            syserr("recv() failed");
+            syserr("poll_recv() failed");
         } else if (bytes_received == 0) {
+            syserr("poll_recv() connection closed");
             debug_print("%s\n", "not recieving anything (metadata)...");
         } else {
             stream->in_buffer += bytes_received;
@@ -99,17 +99,19 @@ int check_metadata(stream_t *stream)
     return 0;
 }
 
-int parse_data(stream_t *stream)
+int parse_data(stream_t *stream, bool meta_data)
 {
-    ssize_t bytes_received = recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer, 0);
+    ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
     if (bytes_received < 0) {
-        syserr("recv() failed");
+        syserr("poll_recv() failed");
     } else if (bytes_received == 0) {
         return -1;
     } else {
         stream->in_buffer += bytes_received;
 
-        check_metadata(stream);
+        if (meta_data)
+            check_metadata(stream);
+
         write_to_file(stream, stream->in_buffer);
     }
 

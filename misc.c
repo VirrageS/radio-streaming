@@ -1,9 +1,12 @@
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include <poll.h>
 
 #include "misc.h"
 #include "err.h"
@@ -37,4 +40,22 @@ int write_to_file(stream_t *stream, size_t bytes_count)
 
     remove_from_buffer(stream, bytes_count);
     return 0;
+}
+
+ssize_t poll_recv(int socket, char* buffer, size_t bytes)
+{
+    ssize_t bytes_received = -1;
+
+    struct pollfd poll_socket[1];
+    poll_socket[0].fd = socket;
+    poll_socket[0].events = POLLIN | POLLHUP;
+
+    int err = poll(poll_socket, 1, 5000);
+    if (err <= 0)
+        return -1;
+    else {
+        bytes_received = recv(socket, buffer, bytes, 0);
+    }
+
+    return bytes_received;
 }

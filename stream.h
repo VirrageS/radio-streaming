@@ -38,8 +38,9 @@ void stream_init(stream_t *stream, FILE* file);
 
     @param stream: Stream on which we want to listen.
     @param path: Path on which are resources on http.
+    @param meta_data: True if meta data should be enabled, false otherwise
     **/
-int send_stream_request(const stream_t *stream, const char* path);
+int send_stream_request(const stream_t *stream, const char* path, bool meta_data);
 
 
 int set_stream_socket(stream_t *stream, const char* host, const char* port);

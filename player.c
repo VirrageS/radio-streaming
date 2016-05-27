@@ -82,8 +82,8 @@ void* handle_commands(void *arg)
                 if (strlen(stream.title) > 0) {
                     sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, (socklen_t)client_len);
                 } else {
-                    char msg[] = "\0";
-                    sendto(command_socket, msg, 1, 0, (struct sockaddr *)&client, (socklen_t)client_len);
+                    char msg[] = "-";
+                    sendto(command_socket, msg, strlen(msg), 0, (struct sockaddr *)&client, (socklen_t)client_len);
                 }
             } else if (strcmp(command, "PAUSE") == 0) {
                 debug_print("%s\n", "stream paused");
@@ -160,7 +160,7 @@ void stream_listen()
 
     // command 'QUIT' can turn off player
     while (player_on) {
-        if (parse_data(&stream) < 0) // check if stream radio has ended connection
+        if (parse_data(&stream, meta_data) < 0) // check if stream radio has ended connection
             player_on = false;
     }
 
@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
     // set player stream
     stream_init(&stream, output_file);
     set_stream_socket(&stream, host, server_port_str);
-    send_stream_request(&stream, path);
+    send_stream_request(&stream, path, meta_data);
 
     stream_listen();
 

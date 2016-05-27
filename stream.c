@@ -25,11 +25,11 @@ void stream_init(stream_t *stream, FILE* file)
     stream->stream_on = true;
 }
 
-int send_stream_request(const stream_t *stream, const char* path)
+int send_stream_request(const stream_t *stream, const char* path, bool meta_data)
 {
     // send request for shoutcast
     char request[1000];
-    sprintf(request, "GET %s HTTP/1.0 \r\nIcy-MetaData: 1 \r\n\r\n", path);
+    sprintf(request, "GET %s HTTP/1.0 \r\nIcy-MetaData: %d \r\n\r\n", path, meta_data);
     size_t request_length = sizeof(request);
     debug_print("request sent: %s\n", request);
 
