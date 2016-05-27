@@ -174,6 +174,8 @@ bool Radio::recv_radio_response(char *buffer, int socket)
         return false;
     } else {
         ssize_t bytes_recieved = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
+        std::cerr << std::string(buffer) << std::endl;
+
         if (bytes_recieved <= 0)
             return false;
     }
