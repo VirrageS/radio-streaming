@@ -534,6 +534,7 @@ void Sessions::remove_session_by_id(const std::string& id)
 
    for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
        if (it->id() == id) {
+           close(it->socket());
            m_sessions.erase(it);
            break;
        }

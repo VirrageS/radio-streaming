@@ -100,12 +100,13 @@ public:
 
     ~Session()
     {
+        for (Radio r : m_radios)
+            remove_radio_by_id(r.id());
+
         m_radios.clear();
         m_radios.shrink_to_fit();
         m_pollSockets.clear();
         m_pollSockets.shrink_to_fit();
-
-        close(m_socket);
     }
 
     std::string id() const { return m_id; }
