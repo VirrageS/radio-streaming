@@ -245,8 +245,8 @@ void Session::parse(std::string message)
             return;
         }
 
-        short ihour = ((int)hour[0] * 10) + (int)hour[1];
-        short iminute = ((int)minute[0] * 10) + (int)minute[1];
+        short ihour = (((int)hour[0] - 48) * 10) + ((int)hour[1] - 48);
+        short iminute = (((int)minute[0] - 48) * 10) + ((int)minute[1] - 48);
 
         debug_print("time [%d:%d]\n", ihour, iminute);
         if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
