@@ -89,7 +89,7 @@ void* handle_session(void *arg)
                             goto end_session;
                         }
                     } else if (bytes_recieved == 0) {
-                        debug_print("ending %d connection", session->socket());
+                        debug_print("ending %d connection\n", session->socket());
                         goto end_session;
                     } else {
                         session->in_buffer += bytes_recieved;

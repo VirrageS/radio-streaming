@@ -42,52 +42,17 @@ static std::string generate_id()
 
 Radio::Radio()
 {
-    m_playerStderr = -1;
-
-    m_host = NULL;
     m_port = 0;
-
-    m_playerHost = NULL;
-    m_playerPath = NULL;
     m_playerPort = 0;
-    m_playerFile = NULL;
-    m_playerMeta = NULL;
-
     m_hour = 0;
     m_minute = 0;
     m_interval = 0;
-}
 
-
-Radio::Radio(const Radio& radio)
-{
-    m_id = radio.m_id;
-
-    m_host = strdup(radio.m_host);
-    m_port = radio.m_port;
-
-    m_playerHost = strdup(radio.m_playerHost);
-    m_playerPath = strdup(radio.m_playerPath);
-    m_playerPort = radio.m_playerPort;
-    m_playerFile = strdup(radio.m_playerFile);
-    m_playerMeta = strdup(radio.m_playerMeta);
-    m_playerStderr = radio.m_playerStderr;
-
-    m_hour = radio.m_hour;
-    m_minute = radio.m_minute;
-    m_interval = radio.m_interval;
-
+    m_playerStderr = -1;
 }
 
 Radio::~Radio()
 {
-    free(m_host);
-
-    free(m_playerHost);
-    free(m_playerPath);
-    free(m_playerFile);
-    free(m_playerMeta);
-
     close(m_playerStderr);
 }
 
@@ -100,7 +65,9 @@ bool Radio::start_radio()
     }
 
     pid_t pid = fork();
-    if (pid == 0) {
+    if (pid < 0) {
+        return false;
+    } else if (pid == 0) {
         close(err_pipe[0]);
         dup2(err_pipe[1], 2);
 
@@ -108,19 +75,19 @@ bool Radio::start_radio()
         std::string port = std::to_string(m_port);
 
         int err = execlp(
-            "ssh", "ssh", m_host,
+            "ssh", "ssh", m_host.c_str(),
             "./player",
-                m_playerHost,
-                m_playerPath,
+                m_playerHost.c_str(),
+                m_playerPath.c_str(),
                 player_port.c_str(),
-                m_playerFile,
+                m_playerFile.c_str(),
                 port.c_str(),
-                m_playerMeta,
+                m_playerMeta.c_str(),
             NULL
         );
 
         if (err < 0) {
-            char msg[] = "SSH failed \n";
+            char msg[] = "SSH failed\n";
             write(err_pipe[1], msg, sizeof(msg));
         }
 
@@ -138,7 +105,7 @@ bool Radio::send_radio_command(std::string message)
 {
     auto msg = message.c_str();
 
-    struct hostent *server = (struct hostent *)gethostbyname(m_host);
+    struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
     if (!server)
         return false;
 
@@ -165,7 +132,7 @@ bool Radio::send_radio_command(std::string message)
 
 bool Radio::recv_radio_response(char *buffer)
 {
-    struct hostent *server = (struct hostent *)gethostbyname(m_host);
+    struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
     if (!server)
         return false;
 
@@ -364,11 +331,11 @@ void Session::parse(std::string message)
 }
 
 
-Radio& Session::add_radio(char *host, unsigned long port,
+Radio& Session::add_radio(const char *host, unsigned long port,
                           unsigned short hour, unsigned short minute,
-                          unsigned int interval, char *player_host,
-                          char *player_path, unsigned long player_port,
-                          char *player_file, char *player_md)
+                          unsigned int interval, const char *player_host,
+                          const char *player_path, unsigned long player_port,
+                          const char *player_file, const char *player_md)
 {
     bool check = false;
 
@@ -386,16 +353,16 @@ Radio& Session::add_radio(char *host, unsigned long port,
         }
     }
 
-    radio.m_host = (char *)strdup(host);
+    radio.m_host = std::string(host);
     radio.m_port = port;
     radio.m_hour = hour;
     radio.m_minute = minute;
     radio.m_interval = interval;
-    radio.m_playerHost = (char *)strdup(player_host);
-    radio.m_playerPath = (char *)strdup(player_path);
+    radio.m_playerHost = std::string(player_host);
+    radio.m_playerPath = std::string(player_path);
     radio.m_playerPort = player_port;
-    radio.m_playerFile = (char *)strdup(player_file);
-    radio.m_playerMeta = (char *)strdup(player_md);
+    radio.m_playerFile = std::string(player_file);
+    radio.m_playerMeta = std::string(player_md);
 
     m_radios.push_back(radio);
     Radio& r = m_radios.back();

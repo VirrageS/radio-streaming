@@ -27,21 +27,20 @@ class Radio {
 public:
     int m_playerStderr;
 
-    char* m_host;
+    std::string m_host;
     unsigned long m_port;
 
-    char* m_playerHost;
-    char* m_playerPath;
+    std::string m_playerHost;
+    std::string m_playerPath;
     unsigned long m_playerPort;
-    char* m_playerFile;
-    char* m_playerMeta;
+    std::string m_playerFile;
+    std::string m_playerMeta;
 
     unsigned short m_hour;
     unsigned short m_minute;
     unsigned int m_interval;
 
     Radio();
-    Radio(const Radio& radio);
     ~Radio();
 
     std::string id() const { return m_id; }
@@ -117,11 +116,11 @@ public:
     std::vector<Radio> radios() { return m_radios; }
     std::vector<pollfd>& poll_sockets() { return m_pollSockets; }
 
-    Radio& add_radio(char *host, unsigned long port, unsigned short hour,
+    Radio& add_radio(const char *host, unsigned long port, unsigned short hour,
                      unsigned short minute, unsigned int interval,
-                     char *player_host, char *player_path,
-                     unsigned long player_port, char *player_file,
-                     char *player_md);
+                     const char *player_host, const char *player_path,
+                     unsigned long player_port, const char *player_file,
+                     const char *player_md);
 
     /**
         Return radio with provided `id` or throws RadioNotFoundException
