@@ -282,7 +282,7 @@ void Session::parse(std::string message)
 
         current_time += (t->tm_min - iminute) * 60;
 
-        debug_print("current %d; starts at: %d\n", time(NULL), current_time);
+        debug_print("current %ld; starts at: %ld\n", time(NULL), current_time);
 
         Event event;
         event.radio_id = radio->id();
