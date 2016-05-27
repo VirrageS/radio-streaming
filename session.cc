@@ -391,6 +391,7 @@ void Session::remove_radio_by_id(const std::string& id)
             // remove stderr socket from poll sockets (if exists)
             for (auto itt = m_pollSockets.begin(); itt != m_pollSockets.end(); ++itt) {
                 if (it->player_stderr() == itt->fd) {
+                    std::cerr << id << " - " << it->player_stderr() << std::endl;
                     m_pollSockets.erase(itt);
                     break;
                 }

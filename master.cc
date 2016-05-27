@@ -44,7 +44,7 @@ void handle_session(Session *session)
     }
 
     while (true) {
-        debug_print("[%s] before poll %d...\n", session->id().c_str(), session->socket());
+        debug_print("[%s] before poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
 
         int err = poll(session->poll_sockets().data(), (int)session->poll_sockets().size(), session->get_timeout() * 1000);
 

@@ -115,7 +115,7 @@ public:
     void socket(int socket) { m_socket = socket; }
 
     std::vector<Radio> radios() { return m_radios; }
-    std::vector<pollfd>& poll_sockets() { return m_pollSockets; }
+    std::vector<pollfd> poll_sockets() { return m_pollSockets; }
 
     Radio& add_radio(const char *host, unsigned long port, unsigned short hour,
                      unsigned short minute, unsigned int interval,
