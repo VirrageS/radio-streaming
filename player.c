@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <limits.h>
 
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -135,7 +137,7 @@ int set_command_socket()
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(command_port);
 
-    err = bind(sock, (struct sockaddr *) &server_address, sizeof(server_address));
+    err = bind(sock, (struct sockaddr *)&server_address, sizeof(server_address));
     if (err < 0) {
         syserr("bind() failed");
     }
@@ -166,6 +168,10 @@ void stream_listen()
 
 FILE* validate_parameters(int argc, char *argv[])
 {
+    if (argc != 7) {
+        fatal("Wrong number of parameters");
+    }
+
     host = argv[1];
     path = argv[2];
     file_name = argv[4];
@@ -176,15 +182,15 @@ FILE* validate_parameters(int argc, char *argv[])
     // validate ports
     server_port_str = argv[3];
     long int tmp_port = strtol(server_port_str, NULL, 10);
-    if (tmp_port <= 0L) {
+    if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
         fatal("Port (%s) should be number larger than 0.\n", server_port_str);
     }
     server_port = (uint16_t)tmp_port;
 
     // command_port_str = argv[5];
     tmp_port = strtol(argv[5], NULL, 10);
-    debug_print("tmp_port: %ld\n", tmp_port);
-    if (tmp_port <= 0L) {
+    debug_print("tmp_port: (%s) %ld\n", argv[5], tmp_port);
+    if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
         fatal("Port (%s) should be number larger than 0.\n", argv[5]);
     }
     command_port = (uint16_t)tmp_port;
@@ -228,5 +234,6 @@ int main(int argc, char *argv[])
     stream_listen();
 
     clean_all();
+
     return 0;
 }

@@ -48,10 +48,13 @@ public:
     bool start_radio();
 
     std::pair<bool, int> send_radio_command(std::string message);
-    bool recv_radio_response(char *buffer, int socket);
+    std::pair<bool, std::string> recv_radio_response(int socket);
 
     void print_radio()
     {
+        if (!DEBUG)
+            return;
+
         std::cerr << "##################################" << std::endl;
         std::cerr << "id\t: " << m_id << std::endl;
         std::cerr << "host\t: " << m_host << std::endl;

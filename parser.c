@@ -85,8 +85,8 @@ int check_metadata(stream_t *stream)
         if (bytes_received < 0) {
             syserr("poll_recv() failed");
         } else if (bytes_received == 0) {
-            syserr("poll_recv() connection closed");
             debug_print("%s\n", "not recieving anything (metadata)...");
+            return -1;
         } else {
             stream->in_buffer += bytes_received;
         }
@@ -117,7 +117,10 @@ int parse_data(stream_t *stream)
     } else {
         stream->in_buffer += bytes_received;
 
-        check_metadata(stream);
+        int err = check_metadata(stream);
+        if (err < 0)
+            return -1;
+
         write_to_file(stream, stream->in_buffer);
     }
 

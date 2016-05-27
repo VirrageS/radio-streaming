@@ -150,11 +150,13 @@ std::pair<bool, int> Radio::send_radio_command(std::string message)
 }
 
 
-bool Radio::recv_radio_response(char *buffer, int socket)
+std::pair<bool, std::string> Radio::recv_radio_response(int socket)
 {
+    std::string response = "";
+
     struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
     if (!server)
-        return false;
+        return std::make_pair(false, "");
 
     struct sockaddr_in server_address;
     int server_len = sizeof(server_address);
@@ -171,16 +173,18 @@ bool Radio::recv_radio_response(char *buffer, int socket)
 
     int err = poll(poll_socket, 1, 5000);
     if (err <= 0) {
-        return false;
+        return std::make_pair(false, "");
     } else {
-        ssize_t bytes_recieved = recvfrom(socket, buffer, 4999, 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
-        std::cerr << bytes_recieved << " - " << std::string(buffer) << std::endl;
+        char buffer[5000];
 
+        ssize_t bytes_recieved = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
         if (bytes_recieved <= 0)
-            return false;
+            return std::make_pair(false, "");
+
+        response = std::string(buffer);
     }
 
-    return true;
+    return std::make_pair(true, response);
 }
 
 
@@ -325,17 +329,16 @@ void Session::parse(std::string message)
             std::string msg = "OK " + radio->id();
 
             if (strcmp(command, "TITLE") == 0) {
-                char buffer[5000];
-                bool received = radio->recv_radio_response(buffer, sent.second);
+                auto received = radio->recv_radio_response(sent.second);
 
-                if (!received) {
+                if (!received.first) {
                     send_session_message("ERROR " + radio->id() + ": title command timeout\n");
                     // remove_radio_by_id(radio->id());
                     return;
                 }
 
                 msg += " ";
-                msg.append(buffer);
+                msg += received.second;
             }
 
             if (strcmp(command, "QUIT") == 0) {

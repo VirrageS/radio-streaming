@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -179,7 +180,7 @@ void validate_parameters(int argc, char* argv[])
         // validate ports
         master_port_str = argv[1];
         long int tmp_port = strtol(master_port_str, NULL, 10);
-        if (tmp_port <= 0L) {
+        if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
             fatal("Port (%s) should be number larger than 0.\n", master_port_str);
         }
         master_port = (uint16_t)tmp_port;
