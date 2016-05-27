@@ -60,7 +60,7 @@ void handle_session(Session *session)
                     continue;
 
                 if (!(descriptor->revents & (POLLIN | POLLHUP))) {
-                    std::cerr << "unexpected revents - " << descriptor->revents << std::endl;
+                    std::cerr << descriptor->fd << " - unexpected revents = " << descriptor->revents << std::endl;
                     goto end_session;
                 }
 
