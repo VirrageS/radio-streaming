@@ -10,7 +10,7 @@
 #include "misc.h"
 #include "err.h"
 
-void stream_init(stream_t *stream, FILE* file)
+void stream_init(stream_t *stream, FILE* file, bool meta_data)
 {
     stream->socket = -1;
     stream->output_file = file;
@@ -22,14 +22,15 @@ void stream_init(stream_t *stream, FILE* file)
     memset(stream->title, 0, sizeof(stream->title));
     stream->title[0] = '\0';
 
+    stream->meta_data = meta_data;
     stream->stream_on = true;
 }
 
-int send_stream_request(const stream_t *stream, const char* path, bool meta_data)
+int send_stream_request(const stream_t *stream, const char* path)
 {
     // send request for shoutcast
     char request[1000];
-    sprintf(request, "GET %s HTTP/1.0 \r\nIcy-MetaData: %d \r\n\r\n", path, meta_data);
+    sprintf(request, "GET %s HTTP/1.0 \r\nIcy-MetaData: %d \r\n\r\n", path, stream->meta_data);
     size_t request_length = sizeof(request);
     debug_print("request sent: %s\n", request);
 

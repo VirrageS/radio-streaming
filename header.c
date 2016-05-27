@@ -13,19 +13,35 @@ static bool is_cr_present(char *str, int pos)
         return false;
 }
 
-int extract_header_fields(header_t *header, char *buffer)
+int extract_header_fields(header_t *header, char *buffer, bool meta_data)
 {
-    char metaint[20];
+    int err;
+    char metaint[256], response_code[256];
+
+    err = get_http_header_field(buffer, "ICY", response_code);
+    if (err != 0)
+        return 1;
+
+    if (strcmp(response_code, "200 OK") != 0)
+        return 1;
+
     get_http_header_field(buffer, "icy-name", header->icy_name);
     get_http_header_field(buffer, "icy-notice1", header->icy_notice1);
     get_http_header_field(buffer, "icy-notice2", header->icy_notice2);
     get_http_header_field(buffer, "icy-genre", header->icy_genre);
     get_http_header_field(buffer, "icy-pub", header->icy_pub);
     get_http_header_field(buffer, "icy-br", header->icy_br);
-    get_http_header_field(buffer, "icy-metaint", metaint);
-    header->metaint = atoi(metaint);
-    header->is_set = true;
 
+    header->metaint = -1;
+    if (meta_data) {
+        err = get_http_header_field(buffer, "icy-metaint", metaint);
+        if (err != 0)
+            return 1;
+
+        header->metaint = atoi(metaint);
+    }
+
+    header->is_set = true;
     return 0;
 }
 
@@ -33,6 +49,11 @@ int get_http_header_field(char *header, const char* field, char* value)
 {
     char *occurrence = strstr(header, field);
     int content_pos = strlen(field) + 1;
+
+    if (!occurrence) {
+        value[0] = '\0';
+        return 1;
+    }
 
     for (int i = content_pos; occurrence[i] != '\0'; i++) {
         if (is_cr_present(occurrence, i)) {

@@ -160,7 +160,7 @@ void stream_listen()
 
     // command 'QUIT' can turn off player
     while (player_on) {
-        if (parse_data(&stream, meta_data) < 0) // check if stream radio has ended connection
+        if (parse_data(&stream) < 0) // check if stream radio has ended connection
             player_on = false;
     }
 
@@ -225,9 +225,9 @@ int main(int argc, char *argv[])
     start_command_listener();
 
     // set player stream
-    stream_init(&stream, output_file);
+    stream_init(&stream, output_file, meta_data);
     set_stream_socket(&stream, host, server_port_str);
-    send_stream_request(&stream, path, meta_data);
+    send_stream_request(&stream, path);
 
     stream_listen();
 

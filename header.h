@@ -18,7 +18,7 @@ typedef struct
     unsigned int metaint; // MP3 data bytes between metadata blocks
 } header_t;
 
-int extract_header_fields(header_t *header, char *buffer);
+int extract_header_fields(header_t *header, char *buffer, bool meta_data);
 int get_http_header_field(char *header, const char* field, char* value);
 int get_metadata_field(char *metadata, const char* field, char* value);
 int print_header(header_t *header);

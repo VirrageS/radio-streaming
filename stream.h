@@ -14,6 +14,8 @@ typedef struct {
     size_t in_buffer; // stores how many data is in buffer
     char buffer[MAX_BUFFER]; // buffer in which we store all the data
 
+    bool meta_data; // should we parse meta data or not
+
     int socket; // socket on which we listen to ICY-Data
     FILE *output_file; // file to which we should write our data
 
@@ -30,17 +32,17 @@ typedef struct {
 
     @param stream: Pointer to stream which we want to initialize.
     @param file: Pointer to file to which we write all mp3 data.
+    @param meta_data: Value which TODO
     **/
-void stream_init(stream_t *stream, FILE* file);
+void stream_init(stream_t *stream, FILE* file, bool meta_data);
 
 /**
     Sends request for listening ICY stream.
 
     @param stream: Stream on which we want to listen.
     @param path: Path on which are resources on http.
-    @param meta_data: True if meta data should be enabled, false otherwise
     **/
-int send_stream_request(const stream_t *stream, const char* path, bool meta_data);
+int send_stream_request(const stream_t *stream, const char* path);
 
 
 int set_stream_socket(stream_t *stream, const char* host, const char* port);

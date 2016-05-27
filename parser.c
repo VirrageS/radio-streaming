@@ -32,7 +32,11 @@ int parse_header(stream_t *stream)
 
             if (parse_point >= 0) {
                 debug_print("%s\n", "parsing headers...");
-                extract_header_fields(&stream->header, stream->buffer);
+                int err = extract_header_fields(&stream->header, stream->buffer, stream->meta_data);
+                if (err < 0) {
+                    syserr("Could not parse header\n");
+                }
+
 
                 if (stream->header.metaint == 0) {
                     syserr("Could not find metaint information\n");
@@ -51,6 +55,10 @@ int parse_header(stream_t *stream)
 
 int check_metadata(stream_t *stream)
 {
+    // check if we should parse any meta data
+    if (!stream->meta_data)
+        return 0;
+
     if (stream->current_interval >= stream->in_buffer) {
         stream->current_interval -= stream->in_buffer;
         return 0;
@@ -99,7 +107,7 @@ int check_metadata(stream_t *stream)
     return 0;
 }
 
-int parse_data(stream_t *stream, bool meta_data)
+int parse_data(stream_t *stream)
 {
     ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
     if (bytes_received < 0) {
@@ -109,9 +117,7 @@ int parse_data(stream_t *stream, bool meta_data)
     } else {
         stream->in_buffer += bytes_received;
 
-        if (meta_data)
-            check_metadata(stream);
-
+        check_metadata(stream);
         write_to_file(stream, stream->in_buffer);
     }
 
