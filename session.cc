@@ -52,10 +52,7 @@ Radio::Radio()
 }
 
 Radio::~Radio()
-{
-    send_radio_command("QUIT");
-    close(m_playerStderr);
-}
+{}
 
 
 bool Radio::start_radio()
@@ -396,6 +393,9 @@ void Session::remove_radio_by_id(const std::string& id)
                     break;
                 }
             }
+
+            it->send_radio_command("QUIT");
+            close(it->player_stderr());
 
             m_radios.erase(it);
             break;
