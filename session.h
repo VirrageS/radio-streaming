@@ -2,7 +2,10 @@
 #define __SESSION_H__
 
 #include <sys/poll.h>
-#include <pthread.h>
+#include <unistd.h>
+
+#include <mutex>
+#include <thread>
 
 #include <string>
 #include <vector>
@@ -79,8 +82,6 @@ private:
 
 class Session {
 public:
-    pthread_t m_thread;
-
     size_t in_buffer;
     char buffer[30000];
 
@@ -158,15 +159,11 @@ private:
 
 class Sessions {
 public:
-    Sessions() {
-        pthread_mutex_init(&m_mutex, NULL);
-    }
+    Sessions() {}
 
     ~Sessions() {
         m_sessions.clear();
         m_sessions.shrink_to_fit();
-
-        pthread_mutex_destroy(&m_mutex);
     }
 
     /**
@@ -184,7 +181,7 @@ public:
     void remove_session_by_id(const std::string& id);
 
 private:
-    pthread_mutex_t m_mutex;
+    std::mutex m_mutex;
     std::vector<Session> m_sessions;
 };
 

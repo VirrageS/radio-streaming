@@ -53,6 +53,7 @@ Radio::Radio()
 
 Radio::~Radio()
 {
+    send_radio_command("QUIT");
     close(m_playerStderr);
 }
 
@@ -395,7 +396,6 @@ void Session::remove_radio_by_id(const std::string& id)
                 }
             }
 
-            it->send_radio_command("QUIT");
             m_radios.erase(it);
             break;
         }
@@ -502,7 +502,7 @@ void Session::handle_timeout()
 
 Session& Sessions::add_session()
 {
-    pthread_mutex_lock(&m_mutex);
+    m_mutex.lock();
 
     Session session;
 
@@ -523,13 +523,13 @@ Session& Sessions::add_session()
     m_sessions.push_back(session);
     Session& s = m_sessions.back();
 
-    pthread_mutex_unlock(&m_mutex);
+    m_mutex.unlock();
     return s;
 }
 
 void Sessions::remove_session_by_id(const std::string& id)
 {
-   pthread_mutex_lock(&m_mutex);
+    m_mutex.lock();
 
    for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
        if (it->id() == id) {
@@ -538,5 +538,5 @@ void Sessions::remove_session_by_id(const std::string& id)
        }
    }
 
-   pthread_mutex_unlock(&m_mutex);
+   m_mutex.unlock();
 }

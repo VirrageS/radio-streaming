@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 #include <stdlib.h>
 
 #include <sys/poll.h>
@@ -35,9 +33,8 @@ void handle_signal(int sig)
 /**
     Thread session function, which handle everything connected with session.
     **/
-void* handle_session(void *arg)
+void handle_session(Session *session)
 {
-    Session *session = (Session*)(arg);
     debug_print("[%s] started handling session...\n", session->id().c_str());
 
     bool added = session->add_poll_fd(session->socket());
@@ -130,7 +127,6 @@ void* handle_session(void *arg)
 end_session:
     debug_print("[%s] closing handling session...\n", session->id().c_str());
     sessions.remove_session_by_id(session->id());
-    return 0;
 }
 
 /**
@@ -199,8 +195,6 @@ int main(int argc, char* argv[])
     set_master_socket();
 
     while (true) {
-        int err;
-
         int client_socket = accept(master_socket, NULL, NULL);
         if (client_socket < 0) {
             syserr("accept() failed");
@@ -209,17 +203,7 @@ int main(int argc, char* argv[])
         Session& session = sessions.add_session();
         session.socket(client_socket);
 
-        err = pthread_create(&session.m_thread, 0, handle_session, (void*)&session);
-        if (err < 0) {
-            sessions.remove_session_by_id(session.id());
-            std::cerr << "Failed to establish session" << std::endl;
-        }
-
-        err = pthread_detach(session.m_thread);
-        if (err < 0) {
-            sessions.remove_session_by_id(session.id());
-            std::cerr << "Failed to establish session" << std::endl;
-        }
+        std::thread (handle_session, &session).detach();
     }
 
 
