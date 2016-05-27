@@ -225,7 +225,6 @@ void Session::parse(std::string message)
         }
 
         Radio& radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
-        radio.print_radio();
 
         bool started = radio.start_radio();
         if (!started) {
@@ -233,6 +232,8 @@ void Session::parse(std::string message)
             send_session_message("ERROR: ssh failed\n");
             return;
         }
+
+        radio.print_radio();
 
         bool added = add_poll_fd(radio.player_stderr());
         if (!added) {

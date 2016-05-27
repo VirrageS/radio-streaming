@@ -48,8 +48,7 @@ void* handle_session(void *arg)
     while (true) {
         debug_print("[%s] before poll %d...\n", session->id().c_str(), session->socket());
 
-        auto sockets = session->poll_sockets();
-        int err = poll(sockets.data(), (int)sockets.size(), session->get_timeout() * 1000);
+        int err = poll(session->poll_sockets().data(), (int)session->poll_sockets().size(), session->get_timeout() * 1000);
 
         if (err < 0) {
             std::cerr << "poll() failed" << std::endl;
@@ -58,7 +57,7 @@ void* handle_session(void *arg)
             debug_print("[%s] handling timeout...\n", session->id().c_str());
             session->handle_timeout();
         } else {
-            for (auto descriptor = sockets.begin(); descriptor != sockets.end(); ++descriptor) {
+            for (auto descriptor = session->poll_sockets().begin(); descriptor != session->poll_sockets().end(); ++descriptor) {
                 if (descriptor->revents == 0)
                     continue;
 
