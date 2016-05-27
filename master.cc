@@ -34,7 +34,7 @@ void handle_signal(int sig)
 /**
     Thread session function, which handle everything connected with session.
     **/
-void handle_session(Session *session)
+void handle_session(std::shared_ptr<Session> session)
 {
     debug_print("[%s] started handling session...\n", session->id().c_str());
 
@@ -73,11 +73,11 @@ void handle_session(Session *session)
                     debug_print("%s\n", "got something on player stderr");
 
                     for (auto radio : session->radios()) {
-                        if (radio.player_stderr() == descriptor->fd) {
-                            std::string msg = "ERROR " + radio.id() + ": " + buffer + "\n";
+                        if (radio->player_stderr() == descriptor->fd) {
+                            std::string msg = "ERROR " + radio->id() + ": " + buffer + "\n";
 
                             session->send_session_message(msg);
-                            session->remove_radio_by_id(radio.id());
+                            session->remove_radio_by_id(radio->id());
                             break;
                         }
                     }
@@ -203,10 +203,10 @@ int main(int argc, char* argv[])
             syserr("accept() failed");
         }
 
-        Session& session = sessions.add_session();
-        session.socket(client_socket);
+        auto session = sessions.add_session();
+        session->socket(client_socket);
 
-        std::thread (handle_session, &session).detach();
+        std::thread (handle_session, session).detach();
     }
 
 

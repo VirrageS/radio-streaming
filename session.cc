@@ -52,7 +52,10 @@ Radio::Radio()
 }
 
 Radio::~Radio()
-{}
+{
+    send_radio_command("QUIT");
+    close(m_playerStderr);
+}
 
 
 bool Radio::start_radio()
@@ -189,24 +192,24 @@ void Session::parse(std::string message)
             return;
         }
 
-        Radio& radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
+        auto radio = add_radio(computer, listen_port, 0, 0, 0, host, path, resource_port, file, meta_data);
 
-        bool started = radio.start_radio();
+        bool started = radio->start_radio();
         if (!started) {
-            remove_radio_by_id(radio.id());
+            remove_radio_by_id(radio->id());
             send_session_message("ERROR: ssh failed\n");
             return;
         }
 
-        radio.print_radio();
+        radio->print_radio();
 
-        bool added = add_poll_fd(radio.player_stderr());
+        bool added = add_poll_fd(radio->player_stderr());
         if (!added) {
-            remove_radio_by_id(radio.id());
+            remove_radio_by_id(radio->id());
             send_session_message("ERROR: could not handle descriptor\n");
         }
 
-        std::string msg = "OK " + radio.id() + "\n";
+        std::string msg = "OK " + radio->id() + "\n";
         send_session_message(msg);
         return;
     }
@@ -241,8 +244,8 @@ void Session::parse(std::string message)
             return;
         }
 
-        Radio& radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
-        radio.print_radio();
+        auto radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
+        radio->print_radio();
 
         time_t current_time = time(NULL);
         auto t = localtime(&current_time);
@@ -260,7 +263,7 @@ void Session::parse(std::string message)
         current_time += (t->tm_min - iminute) * 60;
 
         Event event;
-        event.radio_id = radio.id();
+        event.radio_id = radio->id();
         event.action = START_RADIO;
         event.event_time = current_time;
 
@@ -287,23 +290,23 @@ void Session::parse(std::string message)
         }
 
         try {
-            Radio& radio = get_radio_by_id(id);
+            auto radio = get_radio_by_id(id);
 
-            bool sent = radio.send_radio_command(std::string(command));
+            bool sent = radio->send_radio_command(std::string(command));
             if (!sent) {
-                send_session_message("ERROR " + radio.id() + ": could not send command to player. Probably not reachable.\n");
-                remove_radio_by_id(radio.id());
+                send_session_message("ERROR " + radio->id() + ": could not send command to player. Probably not reachable.\n");
+                remove_radio_by_id(radio->id());
                 return;
             }
 
-            std::string msg = "OK " + radio.id();
+            std::string msg = "OK " + radio->id();
             if (strcmp(command, "TITLE") == 0) {
                 char buffer[5000];
-                bool received = radio.recv_radio_response(buffer);
+                bool received = radio->recv_radio_response(buffer);
 
                 if (!received) {
-                    send_session_message("ERROR " + radio.id() + ": could not reach player\n");
-                    remove_radio_by_id(radio.id());
+                    send_session_message("ERROR " + radio->id() + ": could not reach player\n");
+                    remove_radio_by_id(radio->id());
                     return;
                 }
 
@@ -311,7 +314,7 @@ void Session::parse(std::string message)
             }
 
             if (strcmp(command, "QUIT") == 0) {
-                remove_radio_by_id(radio.id());
+                remove_radio_by_id(radio->id());
             }
 
             msg += "\n";
@@ -329,7 +332,7 @@ void Session::parse(std::string message)
 }
 
 
-Radio& Session::add_radio(const char *host, unsigned long port,
+std::shared_ptr<Radio> Session::add_radio(const char *host, unsigned long port,
                           unsigned short hour, unsigned short minute,
                           unsigned int interval, const char *player_host,
                           const char *player_path, unsigned long player_port,
@@ -337,41 +340,40 @@ Radio& Session::add_radio(const char *host, unsigned long port,
 {
     bool check = false;
 
-    Radio radio;
+    std::shared_ptr<Radio> radio = std::make_shared<Radio>();
 
     while (!check) {
         check = true;
-        radio.id(generate_id());
+        radio->id(generate_id());
 
-        for (Radio r : m_radios) {
-            if (r.id() == radio.id()) {
+        for (auto r : m_radios) {
+            if (r->id() == radio->id()) {
                 check = false;
                 break;
             }
         }
     }
 
-    radio.m_host = std::string(host);
-    radio.m_port = port;
-    radio.m_hour = hour;
-    radio.m_minute = minute;
-    radio.m_interval = interval;
-    radio.m_playerHost = std::string(player_host);
-    radio.m_playerPath = std::string(player_path);
-    radio.m_playerPort = player_port;
-    radio.m_playerFile = std::string(player_file);
-    radio.m_playerMeta = std::string(player_md);
+    radio->m_host = std::string(host);
+    radio->m_port = port;
+    radio->m_hour = hour;
+    radio->m_minute = minute;
+    radio->m_interval = interval;
+    radio->m_playerHost = std::string(player_host);
+    radio->m_playerPath = std::string(player_path);
+    radio->m_playerPort = player_port;
+    radio->m_playerFile = std::string(player_file);
+    radio->m_playerMeta = std::string(player_md);
 
     m_radios.push_back(radio);
-    Radio& r = m_radios.back();
-    return r;
+    return m_radios.back();
 }
 
 
-Radio& Session::get_radio_by_id(const std::string& id)
+std::shared_ptr<Radio> Session::get_radio_by_id(const std::string& id)
 {
-    for (Radio& radio : m_radios) {
-        if (radio.id() == id) {
+    for (auto radio : m_radios) {
+        if (radio->id() == id) {
             return radio;
         }
     }
@@ -384,18 +386,15 @@ void Session::remove_radio_by_id(const std::string& id)
 {
 
     for (auto it = m_radios.begin(); it != m_radios.end(); ++it) {
-        if (it->id() == id) {
+        if (it->get()->id() == id) {
             // remove stderr socket from poll sockets (if exists)
             for (auto itt = m_pollSockets.begin(); itt != m_pollSockets.end(); ++itt) {
-                if (it->player_stderr() == itt->fd) {
-                    std::cerr << id << " - " << it->player_stderr() << std::endl;
+                if (it->get()->player_stderr() == itt->fd) {
+                    std::cerr << id << " - " << it->get()->player_stderr() << std::endl;
                     m_pollSockets.erase(itt);
                     break;
                 }
             }
-
-            it->send_radio_command("QUIT");
-            close(it->player_stderr());
 
             m_radios.erase(it);
             break;
@@ -477,17 +476,17 @@ void Session::handle_timeout()
     m_events.pop();
 
     try {
-        Radio& radio = get_radio_by_id(event.radio_id);
+        auto radio = get_radio_by_id(event.radio_id);
 
         if (event.action == START_RADIO) {
-            radio.start_radio();
-            bool added = add_poll_fd(radio.player_stderr());
+            radio->start_radio();
+            bool added = add_poll_fd(radio->player_stderr());
             if (!added) {
-                remove_radio_by_id(radio.id());
+                remove_radio_by_id(radio->id());
                 send_session_message("ERROR: could not handle descriptor\n");
             }
         } else if (event.action == SEND_QUIT) {
-            radio.send_radio_command("QUIT");
+            radio->send_radio_command("QUIT");
         }
     } catch (std::exception& e) {
         return;
@@ -501,19 +500,19 @@ void Session::handle_timeout()
 ********************
 **/
 
-Session& Sessions::add_session()
+std::shared_ptr<Session> Sessions::add_session()
 {
     m_mutex.lock();
 
-    Session session;
+    std::shared_ptr<Session> session = std::make_shared<Session>();
 
     bool check = false;
     while (!check) {
         check = true;
-        session.id(generate_id());
+        session->id(generate_id());
 
-        for (Session s : m_sessions) {
-            if (s.id() == session.id()) {
+        for (auto s : m_sessions) {
+            if (s->id() == session->id()) {
                 check = false;
                 break;
             }
@@ -522,7 +521,7 @@ Session& Sessions::add_session()
 
 
     m_sessions.push_back(session);
-    Session& s = m_sessions.back();
+    auto s = m_sessions.back();
 
     m_mutex.unlock();
     return s;
@@ -533,8 +532,7 @@ void Sessions::remove_session_by_id(const std::string& id)
     m_mutex.lock();
 
    for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
-       if (it->id() == id) {
-           close(it->socket());
+       if (it->get()->id() == id) {
            m_sessions.erase(it);
            break;
        }

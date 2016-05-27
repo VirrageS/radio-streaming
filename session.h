@@ -6,11 +6,14 @@
 
 #include <mutex>
 #include <thread>
+#include <memory>
 
 #include <string>
 #include <vector>
 #include <queue>
 #include <iostream>
+
+#include "misc.h"
 
 enum ActionsEnum {
     START_RADIO, SEND_QUIT
@@ -100,13 +103,17 @@ public:
 
     ~Session()
     {
-        for (Radio r : m_radios)
-            remove_radio_by_id(r.id());
+        for (auto r : m_radios)
+            remove_radio_by_id(r->id());
 
         m_radios.clear();
         m_radios.shrink_to_fit();
         m_pollSockets.clear();
         m_pollSockets.shrink_to_fit();
+
+        close(m_socket);
+
+        debug_print("%s\n", "session destructor");
     }
 
     std::string id() const { return m_id; }
@@ -115,10 +122,10 @@ public:
     int socket() const { return m_socket; }
     void socket(int socket) { m_socket = socket; }
 
-    std::vector<Radio> radios() { return m_radios; }
+    std::vector<std::shared_ptr<Radio>> radios() { return m_radios; }
     std::vector<pollfd>& poll_sockets() { return m_pollSockets; }
 
-    Radio& add_radio(const char *host, unsigned long port, unsigned short hour,
+    std::shared_ptr<Radio> add_radio(const char *host, unsigned long port, unsigned short hour,
                      unsigned short minute, unsigned int interval,
                      const char *player_host, const char *player_path,
                      unsigned long player_port, const char *player_file,
@@ -132,7 +139,7 @@ public:
         @throws: RadioNotFoundException if radio does not exists.
         @returns: Radio with `id`.
         **/
-    Radio& get_radio_by_id(const std::string& id);
+    std::shared_ptr<Radio> get_radio_by_id(const std::string& id);
 
     void remove_radio_by_id(const std::string& id);
 
@@ -153,7 +160,7 @@ private:
     std::string m_id;
 
     int m_socket;
-    std::vector<Radio> m_radios;
+    std::vector<std::shared_ptr<Radio>> m_radios;
     std::priority_queue<Event> m_events;
     std::vector<pollfd> m_pollSockets;
 };
@@ -172,7 +179,7 @@ public:
 
         @returns: New created session.
         **/
-    Session& add_session();
+    std::shared_ptr<Session> add_session();
 
     /**
         Remove sessions with `id`.
@@ -183,7 +190,7 @@ public:
 
 private:
     std::mutex m_mutex;
-    std::vector<Session> m_sessions;
+    std::vector<std::shared_ptr<Session>> m_sessions;
 };
 
 #endif
