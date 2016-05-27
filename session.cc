@@ -234,7 +234,11 @@ void Session::parse(std::string message)
             return;
         }
 
-        add_poll_fd(radio.player_stderr());
+        bool added = add_poll_fd(radio.player_stderr());
+        if (!added) {
+            remove_radio_by_id(radio.id());
+            send_session_message("ERROR: could not handle descriptor\n");
+        }
 
         std::string msg = "OK " + radio.id() + "\n";
         send_session_message(msg);
@@ -412,6 +416,7 @@ Radio& Session::get_radio_by_id(const std::string& id)
 
 void Session::remove_radio_by_id(const std::string& id)
 {
+
     for (auto it = m_radios.begin(); it != m_radios.end(); ++it) {
         if (it->id() == id) {
             // remove stderr socket from poll sockets (if exists)
@@ -422,6 +427,7 @@ void Session::remove_radio_by_id(const std::string& id)
                 }
             }
 
+            it->send_radio_command("QUIT");
             m_radios.erase(it);
             break;
         }
@@ -504,16 +510,15 @@ void Session::handle_timeout()
     try {
         Radio& radio = get_radio_by_id(event.radio_id);
 
-        switch (event.action) {
-            case START_RADIO:
-                radio.start_radio();
-                add_poll_fd(radio.player_stderr());
-                break;
-            case SEND_QUIT:
-                radio.send_radio_command("QUIT");
-                break;
-            default:
-                break;
+        if (event.action == START_RADIO) {
+            radio.start_radio();
+            bool added = add_poll_fd(radio.player_stderr());
+            if (!added) {
+                remove_radio_by_id(radio.id());
+                send_session_message("ERROR: could not handle descriptor\n");
+            }
+        } else if (event.action == SEND_QUIT) {
+            radio.send_radio_command("QUIT");
         }
     } catch (std::exception& e) {
         return;
