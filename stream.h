@@ -32,7 +32,7 @@ typedef struct {
 
     @param stream: Pointer to stream which we want to initialize.
     @param file: Pointer to file to which we write all mp3 data.
-    @param meta_data: Value which TODO
+    @param meta_data: Value which determines if we should parse meta data.
     **/
 void stream_init(stream_t *stream, FILE* file, bool meta_data);
 

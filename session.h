@@ -9,6 +9,7 @@
 #include <memory>
 
 #include <string>
+#include <utility>
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -46,8 +47,8 @@ public:
 
     bool start_radio();
 
-    bool send_radio_command(std::string message);
-    bool recv_radio_response(char *buffer);
+    std::pair<bool, int> send_radio_command(std::string message);
+    bool recv_radio_response(char *buffer, int socket);
 
     void print_radio()
     {

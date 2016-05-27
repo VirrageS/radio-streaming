@@ -79,12 +79,7 @@ void* handle_commands(void *arg)
 
             if (strcmp(command, "TITLE") == 0) {
                 debug_print("%s\n", "sending current title");
-                if (strlen(stream.title) > 0) {
-                    sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, (socklen_t)client_len);
-                } else {
-                    char msg[] = "-";
-                    sendto(command_socket, msg, strlen(msg), 0, (struct sockaddr *)&client, (socklen_t)client_len);
-                }
+                sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, (socklen_t)client_len);
             } else if (strcmp(command, "PAUSE") == 0) {
                 debug_print("%s\n", "stream paused");
                 stream.stream_on = false;

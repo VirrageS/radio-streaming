@@ -121,17 +121,17 @@ bool Radio::start_radio()
 }
 
 
-bool Radio::send_radio_command(std::string message)
+std::pair<bool, int> Radio::send_radio_command(std::string message)
 {
     auto msg = message.c_str();
 
     struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
     if (!server)
-        return false;
+        return std::make_pair(false, 0);
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0)
-        return false;
+        return std::make_pair(false, 0);
 
     struct sockaddr_in server_address;
 
@@ -143,41 +143,37 @@ bool Radio::send_radio_command(std::string message)
 
     ssize_t bytes_send = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&server_address, (socklen_t)sizeof(server_address));
     if (bytes_send <= 0) {
-        return false;
+        return std::make_pair(false, 0);
     }
 
-    return true;
+    return std::make_pair(true, sock);
 }
 
 
-bool Radio::recv_radio_response(char *buffer)
+bool Radio::recv_radio_response(char *buffer, int socket)
 {
     struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
     if (!server)
         return false;
 
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0)
-        return false;
-
     struct sockaddr_in server_address;
     int server_len = sizeof(server_address);
 
+    memset(&server_address, 0, sizeof(server_address));
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(m_port);
     server_address.sin_addr = *((struct in_addr *)server->h_addr);
     bzero(&(server_address.sin_zero), 8);
 
-
     struct pollfd poll_socket[1];
-    poll_socket[0].fd = sock;
+    poll_socket[0].fd = socket;
     poll_socket[0].events = POLLIN | POLLHUP;
 
     int err = poll(poll_socket, 1, 5000);
     if (err <= 0) {
         return false;
     } else {
-        ssize_t bytes_recieved = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
+        ssize_t bytes_recieved = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
         if (bytes_recieved <= 0)
             return false;
     }
@@ -317,8 +313,8 @@ void Session::parse(std::string message)
         try {
             auto radio = get_radio_by_id(id);
 
-            bool sent = radio->send_radio_command(std::string(command));
-            if (!sent) {
+            auto sent = radio->send_radio_command(std::string(command));
+            if (!sent.first) {
                 send_session_message("ERROR " + radio->id() + ": could not send command to player. Probably not reachable.\n");
                 remove_radio_by_id(radio->id());
                 return;
@@ -328,7 +324,7 @@ void Session::parse(std::string message)
 
             if (strcmp(command, "TITLE") == 0) {
                 char buffer[5000];
-                bool received = radio->recv_radio_response(buffer);
+                bool received = radio->recv_radio_response(buffer, sent.second);
 
                 if (!received) {
                     send_session_message("ERROR " + radio->id() + ": title command timeout\n");
@@ -360,10 +356,9 @@ void Session::parse(std::string message)
 
 
 std::shared_ptr<Radio> Session::add_radio(const char *host, unsigned long port,
-                          unsigned short hour, unsigned short minute,
-                          unsigned int interval, const char *player_host,
-                          const char *player_path, unsigned long player_port,
-                          const char *player_file, const char *player_md)
+    unsigned short hour, unsigned short minute, unsigned int interval,
+    const char *player_host, const char *player_path, unsigned long player_port,
+    const char *player_file, const char *player_md)
 {
     bool check = false;
 
