@@ -51,6 +51,23 @@ Radio::Radio()
     m_playerStderr = -1;
 }
 
+Radio::Radio(const char *host, unsigned long port, unsigned short hour,
+             unsigned short minute, unsigned int interval, const char *player_host,
+             const char *player_path, unsigned long player_port, const char *player_file,
+             const char *player_md)
+{
+    m_host = std::string(host);
+    m_port = port;
+    m_hour = hour;
+    m_minute = minute;
+    m_interval = interval;
+    m_playerHost = std::string(player_host);
+    m_playerPath = std::string(player_path);
+    m_playerPort = player_port;
+    m_playerFile = std::string(player_file);
+    m_playerMeta = std::string(player_md);
+}
+
 Radio::~Radio()
 {
     send_radio_command("QUIT");
@@ -340,7 +357,9 @@ std::shared_ptr<Radio> Session::add_radio(const char *host, unsigned long port,
 {
     bool check = false;
 
-    std::shared_ptr<Radio> radio = std::make_shared<Radio>();
+    std::shared_ptr<Radio> radio = std::make_shared<Radio>(
+        host, port, hour, minute, interval, player_host, player_path,
+        player_port, player_file, player_md);
 
     while (!check) {
         check = true;
@@ -353,17 +372,6 @@ std::shared_ptr<Radio> Session::add_radio(const char *host, unsigned long port,
             }
         }
     }
-
-    radio->m_host = std::string(host);
-    radio->m_port = port;
-    radio->m_hour = hour;
-    radio->m_minute = minute;
-    radio->m_interval = interval;
-    radio->m_playerHost = std::string(player_host);
-    radio->m_playerPath = std::string(player_path);
-    radio->m_playerPort = player_port;
-    radio->m_playerFile = std::string(player_file);
-    radio->m_playerMeta = std::string(player_md);
 
     m_radios.push_back(radio);
     return m_radios.back();
@@ -500,11 +508,40 @@ void Session::handle_timeout()
 ********************
 **/
 
+
 std::shared_ptr<Session> Sessions::add_session()
 {
     m_mutex.lock();
 
     std::shared_ptr<Session> session = std::make_shared<Session>();
+
+    bool check = false;
+    while (!check) {
+        check = true;
+        session->id(generate_id());
+
+        for (auto s : m_sessions) {
+            if (s->id() == session->id()) {
+                check = false;
+                break;
+            }
+        }
+    }
+
+
+    m_sessions.push_back(session);
+    auto s = m_sessions.back();
+
+    m_mutex.unlock();
+    return s;
+}
+
+
+std::shared_ptr<Session> Sessions::add_session(int socket)
+{
+    m_mutex.lock();
+
+    std::shared_ptr<Session> session = std::make_shared<Session>(socket);
 
     bool check = false;
     while (!check) {

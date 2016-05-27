@@ -203,9 +203,7 @@ int main(int argc, char* argv[])
             syserr("accept() failed");
         }
 
-        auto session = sessions.add_session();
-        session->socket(client_socket);
-
+        auto session = sessions.add_session(client_socket);
         std::thread (handle_session, session).detach();
     }
 

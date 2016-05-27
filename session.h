@@ -31,22 +31,11 @@ struct Event {
 
 class Radio {
 public:
-    int m_playerStderr;
-
-    std::string m_host;
-    unsigned long m_port;
-
-    std::string m_playerHost;
-    std::string m_playerPath;
-    unsigned long m_playerPort;
-    std::string m_playerFile;
-    std::string m_playerMeta;
-
-    unsigned short m_hour;
-    unsigned short m_minute;
-    unsigned int m_interval;
-
     Radio();
+    Radio(const char *host, unsigned long port, unsigned short hour,
+          unsigned short minute, unsigned int interval, const char *player_host,
+          const char *player_path, unsigned long player_port, const char *player_file,
+          const char *player_md);
     ~Radio();
 
     std::string id() const { return m_id; }
@@ -81,6 +70,21 @@ public:
 
 private:
     std::string m_id;
+
+    int m_playerStderr;
+
+    std::string m_host;
+    unsigned long m_port;
+
+    std::string m_playerHost;
+    std::string m_playerPath;
+    unsigned long m_playerPort;
+    std::string m_playerFile;
+    std::string m_playerMeta;
+
+    unsigned short m_hour;
+    unsigned short m_minute;
+    unsigned int m_interval;
 };
 
 class Session {
@@ -180,6 +184,7 @@ public:
         @returns: New created session.
         **/
     std::shared_ptr<Session> add_session();
+    std::shared_ptr<Session> add_session(int socket);
 
     /**
         Remove sessions with `id`.
