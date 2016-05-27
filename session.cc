@@ -169,16 +169,16 @@ bool Radio::recv_radio_response(char *buffer, int socket)
     poll_socket[0].fd = socket;
     poll_socket[0].events = POLLIN | POLLHUP;
 
-    int err = poll(poll_socket, 1, 5000);
-    if (err <= 0) {
-        return false;
-    } else {
+    // int err = poll(poll_socket, 1, 5000);
+    // if (err <= 0) {
+    //     return false;
+    // } else {
         ssize_t bytes_recieved = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&server_address, (socklen_t *)&server_len);
         std::cerr << bytes_recieved << " - " << std::string(buffer) << std::endl;
 
         if (bytes_recieved <= 0)
             return false;
-    }
+    // }
 
     return true;
 }
