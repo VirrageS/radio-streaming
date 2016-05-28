@@ -146,7 +146,8 @@ int set_command_socket()
 
 void stream_listen()
 {
-    parse_header(&stream);
+    if (parse_header(&stream) < 0)
+        player_on = false;
 
     if (DEBUG) {
         print_header(&stream.header);

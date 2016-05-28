@@ -105,6 +105,9 @@ int get_http_header_field(char *header, const char* field, char* value)
 static int write_to_file(stream_t *stream, size_t bytes_count)
 {
     if (stream->stream_on) {
+        if (bytes_count == 0)
+            return 0;
+
         size_t bytes_written = fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
         if (bytes_written != bytes_count) {
             syserr("Failed to write to file or stdout\n");
@@ -142,7 +145,7 @@ int parse_header(stream_t *stream)
         if (bytes_received < 0) {
             syserr("poll_recv() failed");
         } else if (bytes_received == 0) {
-            syserr("poll_recv() connection closed");
+            return -1;
         } else {
             int parse_point = -1;
             stream->in_buffer += bytes_received;
