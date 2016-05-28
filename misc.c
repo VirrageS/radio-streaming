@@ -3,14 +3,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
-#include <string.h>
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <poll.h>
 
 #include "misc.h"
+
 
 int strtob(bool* b, const char* str)
 {
@@ -25,23 +24,6 @@ int strtob(bool* b, const char* str)
     return 1;
 }
 
-int remove_from_buffer(stream_t *stream, size_t bytes_count)
-{
-    stream->in_buffer -= bytes_count;
-    memmove(&stream->buffer[0], &stream->buffer[bytes_count], stream->in_buffer);
-    return 0;
-}
-
-int write_to_file(stream_t *stream, size_t bytes_count)
-{
-    if (stream->stream_on) {
-        fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
-        fflush(stream->output_file);
-    }
-
-    remove_from_buffer(stream, bytes_count);
-    return 0;
-}
 
 ssize_t poll_recv(int socket, char* buffer, size_t bytes)
 {

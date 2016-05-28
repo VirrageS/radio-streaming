@@ -335,7 +335,6 @@ void Session::parse(std::string message)
 
                 if (!received.first) {
                     send_session_message("ERROR " + radio->id() + ": title command timeout\n");
-                    // remove_radio_by_id(radio->id());
                     return;
                 }
 
@@ -421,6 +420,7 @@ void Session::remove_radio_by_id(const std::string& id)
         }
     }
 
+    // remove all events which points to removed radio
     std::priority_queue<Event> tmp_events;
     for (; !m_events.empty(); m_events.pop()) {
         auto event = m_events.top();
@@ -438,7 +438,7 @@ bool Session::send_session_message(const std::string& message) const
     auto msg = message.c_str();
 
     size_t to_sent = 0;
-    while (true) {
+    while (to_sent != strlen(msg)) {
         ssize_t bytes_send = send(m_socket, &msg[to_sent], strlen(msg) - to_sent, 0);
         if (bytes_send < 0) {
             if (errno != EWOULDBLOCK)
@@ -448,9 +448,6 @@ bool Session::send_session_message(const std::string& message) const
         } else {
             to_sent += bytes_send;
         }
-
-        if (to_sent == strlen(msg))
-            break;
     }
 
     return true;
@@ -477,8 +474,9 @@ bool Session::add_poll_fd(int socket)
 
 unsigned int Session::get_timeout() const
 {
-    if (m_events.empty())
-        return 1000000; // 10 ^ 6
+    if (m_events.empty()) {
+        return 1000000; // 10 ^ 6 seconds (this should be enough...)
+    }
 
     auto event = m_events.top();
     time_t current_time = time(NULL);
@@ -517,6 +515,7 @@ void Session::handle_timeout()
             remove_radio_by_id(radio->id());
         }
     } catch (std::exception& e) {
+        // radio does not exists
         return;
     }
 }
@@ -540,6 +539,7 @@ std::shared_ptr<Session> Sessions::add_session()
         check = true;
         session->id(generate_id());
 
+        // check if session with generated id already exists
         for (auto s : m_sessions) {
             if (s->id() == session->id()) {
                 check = false;

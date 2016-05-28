@@ -18,8 +18,6 @@ extern "C" {
 #define DEBUG 0
 
 int strtob(bool* b, const char* str);
-int write_to_file(stream_t *stream, size_t bytes_count);
-int remove_from_buffer(stream_t *stream, size_t bytes_count);
 ssize_t poll_recv(int socket, char* buffer, size_t bytes);
 
 /**

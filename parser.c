@@ -42,7 +42,6 @@ static int extract_header_fields(header_t *header, char *buffer, bool meta_data)
         header->metaint = atoi(metaint);
     }
 
-    header->is_set = true;
     return 0;
 }
 
@@ -71,6 +70,12 @@ static int get_metadata_field(char *metadata, const char* field, char* value)
     return 1;
 }
 
+static int remove_from_buffer(stream_t *stream, size_t bytes_count)
+{
+    stream->in_buffer -= bytes_count;
+    memmove(&stream->buffer[0], &stream->buffer[bytes_count], stream->in_buffer);
+    return 0;
+}
 
 int get_http_header_field(char *header, const char* field, char* value)
 {
@@ -95,6 +100,17 @@ int get_http_header_field(char *header, const char* field, char* value)
     // value has not been found
     value[0] = '\0';
     return 1;
+}
+
+static int write_to_file(stream_t *stream, size_t bytes_count)
+{
+    if (stream->stream_on) {
+        fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
+        fflush(stream->output_file);
+    }
+
+    remove_from_buffer(stream, bytes_count);
+    return 0;
 }
 
 
