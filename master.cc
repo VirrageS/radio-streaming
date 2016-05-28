@@ -9,9 +9,8 @@
 
 #include <signal.h>
 
-#include "err.h"
 #include "misc.h"
-#include "session.h"
+#include "session.hh"
 
 int master_socket;
 uint16_t master_port;
@@ -68,14 +67,19 @@ void handle_session(std::shared_ptr<Session> session)
                 if (descriptor->fd != session->socket()) {
                     // we got message on player stderr
                     // so we should delete this
+
                     char buffer[1024];
-                    read(descriptor->fd, buffer, sizeof(buffer));
+                    ssize_t bytes_recieved = read(descriptor->fd, buffer, sizeof(buffer));
+                    if (bytes_recieved <= 0)
+                        bytes_recieved = 0;
+
+                    buffer[bytes_recieved] = '\0';
 
                     debug_print("%s\n", "got something on player stderr");
 
                     for (auto radio : session->radios()) {
                         if (radio->player_stderr() == descriptor->fd) {
-                            std::string msg = "ERROR " + radio->id() + ": " + buffer + "\n";
+                            std::string msg = "ERROR " + radio->id() + ": " + std::string(buffer, bytes_recieved) + "\n";
 
                             session->send_session_message(msg);
                             session->remove_radio_by_id(radio->id());
@@ -83,7 +87,9 @@ void handle_session(std::shared_ptr<Session> session)
                         }
                     }
                 } else {
-                    ssize_t bytes_recieved = read(session->socket(), &session->buffer[session->in_buffer], sizeof(session->buffer) - session->in_buffer);
+                    std::vector<char> tmp_buffer(4096);
+
+                    ssize_t bytes_recieved = read(session->socket(), tmp_buffer.data(), tmp_buffer.size() - 1);
                     if (bytes_recieved < 0) {
                         if (errno != EWOULDBLOCK) {
                             std::cerr << "read() in session failed" << std::endl;
@@ -93,14 +99,14 @@ void handle_session(std::shared_ptr<Session> session)
                         debug_print("ending %d connection\n", session->socket());
                         goto end_session;
                     } else {
-                        session->in_buffer += bytes_recieved;
+                        session->buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
 
                         debug_print("%s\n", "got something to read");
-                        debug_print("message: %s\n", session->buffer);
+                        debug_print("message: %s\n", session->buffer.c_str());
 
                         size_t end = 0;
-                        for (size_t i = 0; i < session->in_buffer; ++i) {
-                            if (i + 1 < session->in_buffer) {
+                        for (size_t i = 0; i < session->buffer.length(); ++i) {
+                            if (i + 1 < session->buffer.length()) {
                                 if (session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') {
                                     end = i + 2;
                                     break;
@@ -114,11 +120,10 @@ void handle_session(std::shared_ptr<Session> session)
                         }
 
                         if (end > 0) {
-                            std::string message = std::string(session->buffer, end);
+                            std::string message = session->buffer.substr(0, end);
                             session->parse(message);
 
-                            session->in_buffer -= end;
-                            memset(&session->buffer, 0, end);
+                            session->buffer.erase(0, end);
                         }
                     }
                 }

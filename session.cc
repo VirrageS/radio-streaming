@@ -14,7 +14,7 @@
 
 #include <algorithm>
 
-#include "session.h"
+#include "session.hh"
 
 class RadioNotFoundException: public std::exception
 {
@@ -301,6 +301,8 @@ void Session::parse(std::string message)
 
         m_events.push(event);
 
+        std::string msg = "OK " + radio->id() + "\n";
+        send_session_message(msg);
         return;
     }
 
@@ -497,11 +499,18 @@ void Session::handle_timeout()
         auto radio = get_radio_by_id(event.radio_id);
 
         if (event.action == START_RADIO) {
-            radio->start_radio();
+            bool started = radio->start_radio();
+            if (!started) {
+                remove_radio_by_id(radio->id());
+                send_session_message("ERROR: ssh failed\n");
+                return;
+            }
+
             bool added = add_poll_fd(radio->player_stderr());
             if (!added) {
                 remove_radio_by_id(radio->id());
                 send_session_message("ERROR: could not handle descriptor\n");
+                return;
             }
         } else if (event.action == SEND_QUIT) {
             radio->send_radio_command("QUIT");

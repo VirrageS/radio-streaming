@@ -22,6 +22,19 @@ int write_to_file(stream_t *stream, size_t bytes_count);
 int remove_from_buffer(stream_t *stream, size_t bytes_count);
 ssize_t poll_recv(int socket, char* buffer, size_t bytes);
 
+/**
+    Wypisuje informację o błędnym zakończeniu funkcji systemowej
+    i kończy działanie programu.
+    **/
+extern void syserr(const char *fmt, ...);
+
+/**
+    Wypisuje informację o błędzie i kończy działanie programu.
+    **/
+extern void fatal(const char *fmt, ...);
+
+void clean_all();
+
 #ifdef __cplusplus
 }
 #endif

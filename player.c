@@ -17,9 +17,7 @@
 #include <signal.h>
 #include <pthread.h>
 
-#include "err.h"
 #include "misc.h"
-#include "header.h"
 #include "stream.h"
 #include "parser.h"
 

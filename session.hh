@@ -93,15 +93,11 @@ private:
 
 class Session {
 public:
-    size_t in_buffer;
-    char buffer[30000];
+    std::string buffer;
 
-    Session()
+    Session() : buffer()
     {
         m_socket = -1;
-
-        in_buffer = 0;
-        memset(&buffer, 0, sizeof(buffer));
     }
 
     Session(int socket) : Session()
@@ -118,6 +114,8 @@ public:
         m_radios.shrink_to_fit();
         m_pollSockets.clear();
         m_pollSockets.shrink_to_fit();
+
+        buffer.clear();
 
         close(m_socket);
 
