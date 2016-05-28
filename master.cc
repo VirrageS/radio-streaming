@@ -99,6 +99,7 @@ void handle_session(std::shared_ptr<Session> session)
                         debug_print("ending %d connection\n", session->socket());
                         goto end_session;
                     } else {
+                        tmp_buffer.resize(bytes_recieved);
                         session->buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
 
                         debug_print("%s\n", "got something to read");
