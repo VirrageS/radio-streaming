@@ -20,11 +20,11 @@ static int extract_header_fields(header_t *header, char *buffer, bool meta_data)
     char metaint[256], response_code[256];
 
     err = get_http_header_field(buffer, "ICY", response_code);
-    if (err != 0)
-        return 1;
+    if (err < 0)
+        return -1;
 
     if (strcmp(response_code, "200 OK") != 0)
-        return 1;
+        return -1;
 
     get_http_header_field(buffer, "icy-name", header->icy_name);
     get_http_header_field(buffer, "icy-notice1", header->icy_notice1);
@@ -36,8 +36,8 @@ static int extract_header_fields(header_t *header, char *buffer, bool meta_data)
     header->metaint = -1;
     if (meta_data) {
         err = get_http_header_field(buffer, "icy-metaint", metaint);
-        if (err != 0)
-            return 1;
+        if (err < 0)
+            return -1;
 
         header->metaint = atoi(metaint);
     }
@@ -67,7 +67,7 @@ static int get_metadata_field(char *metadata, const char* field, char* value)
 
     // Value hasn't been found
     value[0] = '\0';
-    return 1;
+    return -1;
 }
 
 static int remove_from_buffer(stream_t *stream, size_t bytes_count)
@@ -84,7 +84,7 @@ int get_http_header_field(char *header, const char* field, char* value)
 
     if (!occurrence) {
         value[0] = '\0';
-        return 1;
+        return -1;
     }
 
     for (int i = content_pos; occurrence[i] != '\0'; i++) {
@@ -99,13 +99,17 @@ int get_http_header_field(char *header, const char* field, char* value)
 
     // value has not been found
     value[0] = '\0';
-    return 1;
+    return -1;
 }
 
 static int write_to_file(stream_t *stream, size_t bytes_count)
 {
     if (stream->stream_on) {
-        fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
+        size_t bytes_written = fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
+        if (bytes_written != bytes_count) {
+            syserr("Failed to write to file or stdout\n");
+        }
+
         fflush(stream->output_file);
     }
 
@@ -159,7 +163,7 @@ int parse_header(stream_t *stream)
                 }
 
 
-                if (stream->header.metaint == 0) {
+                if (stream->header.metaint <= 0) {
                     syserr("Could not find metaint information\n");
                 }
 

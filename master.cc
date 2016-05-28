@@ -167,6 +167,18 @@ void set_master_socket()
     if (err < 0)
         syserr("listen() failed");
 
+    if (master_port == 0) {
+        // get port on which master is listening
+
+        socklen_t len = sizeof(server);
+        err = getsockname(sock, (struct sockaddr *)&server, &len);
+        if (err < 0) {
+            syserr("failed to get port number");
+        }
+
+        std::cout << ntohs(server.sin_port) << std::endl;
+    }
+
     master_socket = sock;
 }
 
@@ -188,6 +200,7 @@ void validate_parameters(int argc, char* argv[])
         if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
             fatal("Port (%s) should be number larger than 0.\n", master_port_str);
         }
+
         master_port = (uint16_t)tmp_port;
     }
 }
