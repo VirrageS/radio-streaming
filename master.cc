@@ -76,7 +76,7 @@ void handle_session(std::shared_ptr<Session> session)
                         if (bytes_recieved <= 0)
                             break;
 
-                        tmp_buffer.resize(bytes_received);
+                        tmp_buffer.resize(bytes_recieved);
                         buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
                     }
 
