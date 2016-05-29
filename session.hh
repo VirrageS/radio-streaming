@@ -112,8 +112,10 @@ public:
 
     ~Session()
     {
-        for (auto r : m_radios)
+        for (auto r : m_radios) {
+            r->send_radio_command("QUIT");
             remove_radio_by_id(r->id());
+        }
 
         m_radios.clear();
         m_radios.shrink_to_fit();

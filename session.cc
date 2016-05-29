@@ -127,6 +127,11 @@ bool Radio::start_radio()
 
 std::pair<bool, int> Radio::send_radio_command(std::string message)
 {
+    // player is not active yet... or anymore
+    if (!m_active) {
+        return std::make_pair(false, 0);
+    }
+
     auto msg = message.c_str();
 
     struct hostent *server = (struct hostent *)gethostbyname(m_host.c_str());
@@ -324,11 +329,6 @@ void Session::parse(std::string message)
 
         try {
             auto radio = get_radio_by_id(id);
-
-            if (!radio->active()) {
-                send_session_message("ERROR " + radio->id() + ": player has not started yet...\n");
-                return;
-            }
 
             auto sent = radio->send_radio_command(std::string(command));
             if (!sent.first) {
