@@ -137,7 +137,7 @@ int set_command_socket()
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(command_port);
 
-    err = bind(sock, (struct sockaddr *)&server_address, sizeof(server_address));
+    err = bind(sock, (struct sockaddr *)&server_address, (socklen_t)sizeof(server_address));
     if (err < 0) {
         syserr("bind() failed");
     }
@@ -149,7 +149,7 @@ int set_command_socket()
 void stream_listen()
 {
     if (parse_header(&stream) < 0)
-        player_on = false;
+        syserr("Failed to get header...");
 
     print_header(&stream.header);
     debug_print("%s\n", "stream is listening");
