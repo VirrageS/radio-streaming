@@ -51,7 +51,7 @@ Radio::Radio()
     m_interval = 0;
 
     m_playerStderr = -1;
-    m_started = false;
+    m_active = false;
 }
 
 Radio::Radio(const char *host, unsigned long port, unsigned short hour,
@@ -73,7 +73,7 @@ Radio::Radio(const char *host, unsigned long port, unsigned short hour,
 
 Radio::~Radio()
 {
-    if (m_started)
+    if (m_active)
         send_radio_command("QUIT");
 
     close(m_playerStderr);
@@ -120,7 +120,7 @@ bool Radio::start_radio()
         m_playerStderr = err_pipe[0];
     }
 
-    m_started = true;
+    m_active = true;
     return true;
 }
 
@@ -325,7 +325,7 @@ void Session::parse(std::string message)
         try {
             auto radio = get_radio_by_id(id);
 
-            if (!radio->started()) {
+            if (!radio->active()) {
                 send_session_message("ERROR " + radio->id() + ": player has not started yet...\n");
                 return;
             }
@@ -424,6 +424,7 @@ void Session::remove_radio_by_id(const std::string& id)
                 }
             }
 
+            it->get()->active(false);
             m_radios.erase(it);
             break;
         }
