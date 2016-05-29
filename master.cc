@@ -127,8 +127,32 @@ void handle_session(std::shared_ptr<Session> session)
 
                         if (end > 0) {
                             std::string message = session->buffer.substr(0, end);
-                            session->parse(message);
 
+                            // remove controlling bytes
+                            bool found = true;
+                            while (found) {
+                                found = false;
+
+                                for (size_t i = 0; i < message.length(); i++) {
+                                    if (message[i] == '\xff') {
+                                        size_t to_remove;
+
+                                        if (message[i + 1] == '\xff') {
+                                            to_remove = 2;
+                                        } else if (message[i + 1] > '\xfa') {
+                                            to_remove = 3;
+                                        } else  {
+                                            to_remove = 2;
+                                        }
+
+                                        found = true;
+                                        message.erase(message.cbegin() + i, message.cbegin() + i + to_remove);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            session->parse(message);
                             session->buffer.erase(0, end);
                         }
                     }
