@@ -51,6 +51,7 @@ Radio::Radio()
     m_interval = 0;
 
     m_playerStderr = -1;
+    m_started = false;
 }
 
 Radio::Radio(const char *host, unsigned long port, unsigned short hour,
@@ -117,6 +118,7 @@ bool Radio::start_radio()
         m_playerStderr = err_pipe[0];
     }
 
+    m_started = true;
     return true;
 }
 
@@ -320,6 +322,11 @@ void Session::parse(std::string message)
 
         try {
             auto radio = get_radio_by_id(id);
+
+            if (!radio->started()) {
+                send_session_message("ERROR " + radio->id() + ": player has not started yet...\n");
+                return;
+            }
 
             auto sent = radio->send_radio_command(std::string(command));
             if (!sent.first) {

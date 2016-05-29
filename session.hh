@@ -45,6 +45,8 @@ public:
     int player_stderr() const { return m_playerStderr; }
     void player_stderr(int player_stderr) { m_playerStderr = player_stderr; }
 
+    bool started() const { return m_started; }
+
     bool start_radio();
 
     std::pair<bool, int> send_radio_command(std::string message);
@@ -69,11 +71,13 @@ public:
         std::cerr << "player-file\t: " << m_playerFile << std::endl;
         std::cerr << "player-md\t: " << m_playerMeta << std::endl;
         std::cerr << "player-err\t: " << m_playerStderr << std::endl;
+        std::cerr << "started\t: " << m_started << std::endl;
         std::cerr << "##################################" << std::endl;
     }
 
 private:
     std::string m_id;
+    bool m_started;
 
     int m_playerStderr;
 
