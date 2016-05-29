@@ -14,7 +14,7 @@ void stream_init(stream_t *stream, FILE* file, bool meta_data)
 {
     stream->socket = -1;
     stream->output_file = file;
-    // stream.header
+
     stream->current_interval = 0;
     stream->in_buffer = 0;
     memset(stream->buffer, 0, sizeof(stream->buffer));
@@ -25,6 +25,7 @@ void stream_init(stream_t *stream, FILE* file, bool meta_data)
     stream->meta_data = meta_data;
     stream->stream_on = true;
 }
+
 
 int send_stream_request(const stream_t *stream, const char* path)
 {
@@ -45,6 +46,7 @@ int send_stream_request(const stream_t *stream, const char* path)
 
     return 0;
 }
+
 
 int set_stream_socket(stream_t *stream, const char* host, const char* port)
 {

@@ -15,7 +15,7 @@ typedef struct
     char icy_pub[10];
     char icy_br[10]; // bitrate
 
-    unsigned int metaint; // MP3 data bytes between metadata blocks
+    unsigned long metaint; // MP3 data bytes between metadata blocks
 } header_t;
 
 
@@ -49,14 +49,21 @@ typedef struct {
 void stream_init(stream_t *stream, FILE* file, bool meta_data);
 
 /**
-    Sends request for listening ICY stream.
+    Send request for listening ICY stream.
 
     @param stream: Stream on which we want to listen.
     @param path: Path on which are resources on http.
     **/
 int send_stream_request(const stream_t *stream, const char* path);
 
+/**
+    Set client socket for stream. Connects to ICY server on `host` and `port`.
 
+    @param stream: Stream on which we want to make connection.
+    @param host: Host on which ICY server is listening.
+    @param port: Port on which ICY server is listening.
+    @returns: 0 if connection was successful, -1 otherwise.
+    **/
 int set_stream_socket(stream_t *stream, const char* host, const char* port);
 
 #endif

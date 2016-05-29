@@ -2,10 +2,18 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <errno.h>
 
 #include "parser.h"
 #include "misc.h"
 
+/**
+    Check if sequence '\r\n' is in string.
+
+    @param str: String in which we search for sequence.
+    @param pos: Position at which we expect this sequence to appear.
+    @returns: True if sequence is presented, false otherwise.
+    **/
 static bool is_cr_present(char *str, int pos)
 {
     if (str[pos-1] == '\r' && str[pos] == '\n')
@@ -14,7 +22,34 @@ static bool is_cr_present(char *str, int pos)
         return false;
 }
 
-static int extract_header_fields(header_t *header, char *buffer, bool meta_data)
+
+static int get_http_header_field(char *header, const char* field, char* value)
+{
+    char *occurrence = strstr(header, field);
+    int content_pos = strlen(field) + 1;
+
+    if (!occurrence) {
+        value[0] = '\0';
+        return -1;
+    }
+
+    for (int i = content_pos; occurrence[i] != '\0'; i++) {
+        if (is_cr_present(occurrence, i)) {
+            // "<field>:" is deleted
+            strncpy(value, occurrence + content_pos, i - content_pos);
+            value[i - content_pos - 1] = '\0';
+
+            return 0;
+        }
+    }
+
+    // value has not been found
+    value[0] = '\0';
+    return -1;
+}
+
+
+static int extract_header_fields(header_t *header, char *buffer)
 {
     int err;
     char metaint[256], response_code[256];
@@ -33,17 +68,18 @@ static int extract_header_fields(header_t *header, char *buffer, bool meta_data)
     get_http_header_field(buffer, "icy-pub", header->icy_pub);
     get_http_header_field(buffer, "icy-br", header->icy_br);
 
-    header->metaint = -1;
-    if (meta_data) {
-        err = get_http_header_field(buffer, "icy-metaint", metaint);
-        if (err < 0)
-            return -1;
+    header->metaint = 0;
+    err = get_http_header_field(buffer, "icy-metaint", metaint);
+    if (err == 0) {
+        header->metaint = strtoul(metaint, NULL, 10);
 
-        header->metaint = atoi(metaint);
+        if (errno == ERANGE)
+            return -1;
     }
 
     return 0;
 }
+
 
 static int get_metadata_field(char *metadata, const char* field, char* value)
 {
@@ -70,6 +106,7 @@ static int get_metadata_field(char *metadata, const char* field, char* value)
     return -1;
 }
 
+
 static int remove_from_buffer(stream_t *stream, size_t bytes_count)
 {
     stream->in_buffer -= bytes_count;
@@ -77,30 +114,6 @@ static int remove_from_buffer(stream_t *stream, size_t bytes_count)
     return 0;
 }
 
-int get_http_header_field(char *header, const char* field, char* value)
-{
-    char *occurrence = strstr(header, field);
-    int content_pos = strlen(field) + 1;
-
-    if (!occurrence) {
-        value[0] = '\0';
-        return -1;
-    }
-
-    for (int i = content_pos; occurrence[i] != '\0'; i++) {
-        if (is_cr_present(occurrence, i)) {
-            // "<field>:" is deleted
-            strncpy(value, occurrence + content_pos, i - content_pos);
-            value[i - content_pos - 1] = '\0';
-
-            return 0;
-        }
-    }
-
-    // value has not been found
-    value[0] = '\0';
-    return -1;
-}
 
 static int write_to_file(stream_t *stream, size_t bytes_count)
 {
@@ -118,67 +131,6 @@ static int write_to_file(stream_t *stream, size_t bytes_count)
     }
 
     remove_from_buffer(stream, bytes_count);
-    return 0;
-}
-
-
-int print_header(header_t *header)
-{
-    debug_print("%s\n", "##################################");
-    debug_print("Name\t: %s\n", header->icy_name);
-    debug_print("icy-notice1\t: %s\n", header->icy_notice1);
-    debug_print("icy-notice2\t: %s\n", header->icy_notice2);
-    debug_print("Genre\t: %s\n", header->icy_genre);
-    //debug_print("Public\t: %s\n", (header->icy_pub?"yes":"no"));
-    debug_print("Bitrate : %s kbit/s\n", header->icy_br);
-    debug_print("metaint\t: %d\n", header->metaint);
-    debug_print("%s\n", "##################################");
-    return 0;
-}
-
-
-int parse_header(stream_t *stream)
-{
-    debug_print("%s\n", "parsing header...");
-    while (true) {
-        debug_print("socket: %d; buffer_size: %zu\n", stream->socket, sizeof(stream->buffer) - stream->in_buffer);
-        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
-        if (bytes_received < 0) {
-            syserr("poll_recv() failed - parse_header");
-        } else if (bytes_received == 0) {
-            return -1;
-        } else {
-            int parse_point = -1;
-            stream->in_buffer += bytes_received;
-
-            for (size_t i = 3; i < stream->in_buffer; ++i) {
-                if (stream->buffer[i-3] == '\r' && stream->buffer[i-2] == '\n' && stream->buffer[i-1] == '\r' && stream->buffer[i] == '\n') {
-                    parse_point = i + 1;
-                }
-            }
-
-            debug_print("%s\n", "got some header...");
-
-            if (parse_point >= 0) {
-                debug_print("%s\n", "parsing headers...");
-                int err = extract_header_fields(&stream->header, stream->buffer, stream->meta_data);
-                if (err < 0) {
-                    syserr("Could not parse header\n");
-                }
-
-
-                if (stream->header.metaint <= 0) {
-                    syserr("Could not find metaint information\n");
-                }
-
-                stream->in_buffer -= parse_point;
-                memmove(&stream->buffer[0], &stream->buffer[parse_point], stream->in_buffer);
-                break;
-            }
-        }
-    }
-
-    stream->current_interval = stream->header.metaint;
     return 0;
 }
 
@@ -243,24 +195,77 @@ end_checking:
 }
 
 
+int print_header(header_t *header)
+{
+    debug_print("%s\n", "##################################");
+    debug_print("Name\t: %s\n", header->icy_name);
+    debug_print("icy-notice1\t: %s\n", header->icy_notice1);
+    debug_print("icy-notice2\t: %s\n", header->icy_notice2);
+    debug_print("Genre\t: %s\n", header->icy_genre);
+    //debug_print("Public\t: %s\n", (header->icy_pub?"yes":"no"));
+    debug_print("Bitrate : %s kbit/s\n", header->icy_br);
+    debug_print("metaint\t: %lu\n", header->metaint);
+    debug_print("%s\n", "##################################");
+    return 0;
+}
+
+
+int parse_header(stream_t *stream)
+{
+    debug_print("%s\n", "parsing header...");
+
+    while (true) {
+        debug_print("socket: %d; buffer_size: %zu\n", stream->socket, sizeof(stream->buffer) - stream->in_buffer);
+        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
+        if (bytes_received <= 0) {
+            return -1;
+        } else {
+            ssize_t parse_point = -1;
+            stream->in_buffer += bytes_received;
+
+            for (size_t i = 3; i < stream->in_buffer; ++i) {
+                if (stream->buffer[i-3] == '\r' && stream->buffer[i-2] == '\n' && stream->buffer[i-1] == '\r' && stream->buffer[i] == '\n') {
+                    parse_point = i + 1;
+                }
+            }
+
+            debug_print("%s\n", "got some header...");
+
+            if (parse_point >= 0) {
+                debug_print("%s\n", "parsing headers...");
+                int err = extract_header_fields(&stream->header, stream->buffer);
+                if (err < 0)
+                    return -1;
+
+                // check server decided not to send meta data
+                if (stream->meta_data && (stream->header.metaint == 0L))
+                    stream->meta_data = false;
+
+                remove_from_buffer(stream, parse_point);
+                break;
+            }
+        }
+    }
+
+    stream->current_interval = stream->header.metaint;
+    return 0;
+}
+
+
 int parse_data(stream_t *stream)
 {
     ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
-    if (bytes_received < 0) {
-        syserr("poll_recv() failed - parse_data");
-    } else if (bytes_received == 0) {
-        return -1;
-    } else {
+    if (bytes_received > 0) {
         stream->in_buffer += bytes_received;
 
         while (stream->in_buffer > 0) {
             ssize_t bytes_to_write = check_metadata(stream);
             if (bytes_to_write < 0)
-                return -1;
+                return 0;
 
             write_to_file(stream, bytes_to_write);
         }
     }
 
-    return 0;
+    return bytes_received;
 }

@@ -43,6 +43,7 @@ ssize_t poll_recv(int socket, char* buffer, size_t bytes)
     return bytes_received;
 }
 
+
 void syserr(const char *fmt, ...)
 {
     va_list fmt_args;
@@ -57,6 +58,7 @@ void syserr(const char *fmt, ...)
 
     exit(EXIT_FAILURE);
 }
+
 
 void fatal(const char *fmt, ...)
 {

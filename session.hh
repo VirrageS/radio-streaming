@@ -21,9 +21,9 @@ enum ActionsEnum {
 };
 
 struct Event {
-    std::string radio_id;
-    ActionsEnum action;
-    time_t event_time;
+    std::string radio_id; // radio id for which this is connected
+    ActionsEnum action; // action which event will execute
+    time_t event_time; // time at which event will be executed
 
     bool operator<(const Event& event) const {
         return event_time >= event.event_time;
@@ -39,42 +39,57 @@ public:
           const char *player_md);
     ~Radio();
 
+    /**
+        Convert player to string.
+
+        @returns: Human readable player.
+        **/
+    std::string to_string();
+
+    /**
+        Return player's id.
+
+        @returns: Id assigned to player.
+        **/
     std::string id() const { return m_id; }
+
+    /**
+        Set `id` for player.
+        **/
     void id(const std::string& id) { m_id = id; }
 
+    /**
+        Return number of player stderr descriptor.
+
+        @returns: Player's stderr number descriptor.
+        **/
     int player_stderr() const { return m_playerStderr; }
+
+    /**
+        Set stderr descriptor for player.
+
+        @param player_stderr: Stderr descriptor number.
+        **/
     void player_stderr(int player_stderr) { m_playerStderr = player_stderr; }
 
+    /**
+        Return player state (active or not).
+
+        @returns: Current state of player.
+        **/
     bool active() const { return m_active; }
     void active(bool active) { m_active = active; }
 
+    /**
+        Start player on host.
+
+        @returns: True if player has started, false otherwise.
+        **/
     bool start_radio();
 
     std::pair<bool, int> send_radio_command(std::string message);
     std::pair<bool, std::string> recv_radio_response(int socket);
 
-    void print_radio()
-    {
-        if (!DEBUG)
-            return;
-
-        std::cerr << "##################################" << std::endl;
-        std::cerr << "id\t: " << m_id << std::endl;
-        std::cerr << "host\t: " << m_host << std::endl;
-        std::cerr << "port\t: " << m_port << std::endl;
-        std::cerr << "hour\t: " << m_hour << std::endl;
-        std::cerr << "minute\t: " << m_minute << std::endl;
-        std::cerr << "interval\t: " << m_interval << std::endl;
-
-        std::cerr << "player-host\t: " << m_playerHost << std::endl;
-        std::cerr << "player-path\t: " << m_playerPath << std::endl;
-        std::cerr << "player-port\t: " << m_playerPort << std::endl;
-        std::cerr << "player-file\t: " << m_playerFile << std::endl;
-        std::cerr << "player-md\t: " << m_playerMeta << std::endl;
-        std::cerr << "player-err\t: " << m_playerStderr << std::endl;
-        std::cerr << "started\t: " << m_active << std::endl;
-        std::cerr << "##################################" << std::endl;
-    }
 
 private:
     std::string m_id;
@@ -98,7 +113,7 @@ private:
 
 class Session {
 public:
-    std::string buffer;
+    std::string buffer; // session buffer
 
     Session() : buffer()
     {
@@ -127,15 +142,57 @@ public:
         close(m_socket);
     }
 
+    /**
+        Return session's id.
+
+        @returns: Id assigned for session.
+        **/
     std::string id() const { return m_id; }
+
+    /**
+        Set `id` for session.
+
+        @param id: Id which we want to set for session.
+        **/
     void id(const std::string& id) { m_id = id; }
 
-    int socket() const { return m_socket; }
-    void socket(int socket) { m_socket = socket; }
+    /**
+        Return session socket.
 
+        @returns: Session socket.
+        **/
+    int socket() const { return m_socket; }
+
+    /**
+        Return all players.
+
+        @returns: All players in session.
+        **/
     std::vector<std::shared_ptr<Radio>> radios() { return m_radios; }
+
+    /**
+        Return all poll sockets.
+
+        @returns: All poll sockets.
+        **/
     std::vector<pollfd>& poll_sockets() { return m_pollSockets; }
 
+    /**
+        Add player with parameters to session.
+
+        @param host: Host on which player will be started (and also listening).
+        @param port: Port on which player will be listening to commands.
+        @param hour: Hour at which player should be started.
+        @param minute: Minute at which player shoule be started.
+        @param interval: How long should player been listening to data (in minutes).
+        @param player_host: Host on which player will be listening for ICY data.
+        @param player_path: Path to resource on which player will be listening for ICY data.
+        @param player_port: Port on which player will connect to ICY server.
+        @param player_file: File to which player will save data ("-" will make player to send data on stdout).
+        @param player_md: Checks if we should ask for metadata or not.
+
+        @returns: Radio with parameters.
+        **/
     std::shared_ptr<Radio> add_radio(const char *host, unsigned long port, unsigned short hour,
                      unsigned short minute, unsigned int interval,
                      const char *player_host, const char *player_path,
@@ -148,16 +205,44 @@ public:
 
         @param id: ID of radio which we want to find
         @throws: RadioNotFoundException if radio does not exists.
+
         @returns: Radio with `id`.
         **/
     std::shared_ptr<Radio> get_radio_by_id(const std::string& id);
 
+    /**
+        Remove player with `id` from current session.
+
+        @param id: Id of player which we want to delete.
+        **/
     void remove_radio_by_id(const std::string& id);
 
+    /**
+        Send message to the other side of (telnet) session.
+
+        @param message: Message which we want to send.
+        @returns: True if sending was successful, false otherwise
+        **/
     bool send_session_message(const std::string& message) const;
 
+    /**
+        Add socket to poll sockets.
+
+        @param socket: Socket which we want to add.
+        @returns: True if adding was successful, false otherwise.
+        **/
     bool add_poll_fd(int socket);
+
+    /**
+        Return time for next pending event.
+
+        @returns: Time for next event.
+        **/
     unsigned int get_timeout() const;
+
+    /**
+        Get pending event and execute it.
+        **/
     void handle_timeout();
 
     /**
@@ -168,12 +253,12 @@ public:
     void parse(std::string message);
 
 private:
-    std::string m_id;
+    std::string m_id; // session id
 
-    int m_socket;
-    std::vector<std::shared_ptr<Radio>> m_radios;
-    std::priority_queue<Event> m_events;
-    std::vector<pollfd> m_pollSockets;
+    int m_socket; // socket on which (telnet) session is listening
+    std::vector<std::shared_ptr<Radio>> m_radios; // all players
+    std::priority_queue<Event> m_events; // pending session events
+    std::vector<pollfd> m_pollSockets; // all poll sockets in session (session socket and players' stderr)
 };
 
 class Sessions {
@@ -191,6 +276,13 @@ public:
         @returns: New created session.
         **/
     std::shared_ptr<Session> add_session();
+
+    /**
+        Add session with `socket` to sessions and returns new created one.
+
+        @param socket: Socket on which new session will be listening
+        @returns: New created session.
+        **/
     std::shared_ptr<Session> add_session(int socket);
 
     /**
@@ -201,8 +293,8 @@ public:
     void remove_session_by_id(const std::string& id);
 
 private:
-    std::mutex m_mutex;
-    std::vector<std::shared_ptr<Session>> m_sessions;
+    std::mutex m_mutex; // mutex to protect sessions
+    std::vector<std::shared_ptr<Session>> m_sessions; // all sessions
 };
 
 #endif

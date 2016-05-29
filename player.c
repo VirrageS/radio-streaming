@@ -55,6 +55,9 @@ void handle_signal(int sig)
     exit(sig);
 }
 
+/**
+    Function for thread which handle commands.
+    **/
 void* handle_commands(void *arg)
 {
     // get command
@@ -101,6 +104,9 @@ void* handle_commands(void *arg)
     return 0;
 }
 
+/**
+    Start thread for command listener.
+    **/
 void start_command_listener()
 {
     int err;
@@ -119,6 +125,10 @@ void start_command_listener()
     debug_print("%s\n", "command listener just have started");
 }
 
+
+/**
+    Set socket for command listener.
+    **/
 int set_command_socket()
 {
     int err = 0;
@@ -146,6 +156,9 @@ int set_command_socket()
 }
 
 
+/**
+    Listen to ICY server stream.
+    **/
 void stream_listen()
 {
     if (parse_header(&stream) < 0)
@@ -156,14 +169,22 @@ void stream_listen()
 
     // command 'QUIT' can turn off player
     while (player_on) {
-        if (parse_data(&stream) < 0) // check if stream radio has ended connection
+        ssize_t bytes_received = parse_data(&stream);
+        if (bytes_received < 0) {
+            syserr("Parsing data failed");
+        } else if (bytes_received == 0) {
+            // check if stream radio has ended connection
             player_on = false;
+        }
     }
 
     debug_print("%s\n", "stream is not listening");
 }
 
 
+/**
+    Validate player parameters.
+    **/
 FILE* validate_parameters(int argc, char *argv[])
 {
     if (argc != 7) {
@@ -212,6 +233,7 @@ FILE* validate_parameters(int argc, char *argv[])
 
     return output_file;
 }
+
 
 int main(int argc, char *argv[])
 {

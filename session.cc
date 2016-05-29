@@ -79,6 +79,29 @@ Radio::~Radio()
     close(m_playerStderr);
 }
 
+std::string Radio::to_string()
+{
+    std::string radio = "";
+    radio = radio + "##################################" + "\n";
+    radio += "id\t: " + m_id + "\n";
+    radio += "host\t: " + m_host + "\n";
+    radio += "port\t: " + std::to_string(m_port) + "\n";
+    radio += "hour\t: " + std::to_string(m_hour) + "\n";
+    radio += "minute\t: " + std::to_string(m_minute) + "\n";
+    radio += "interval\t: " + std::to_string(m_interval) + "\n";
+
+    radio += "player-host\t: " + m_playerHost + "\n";
+    radio += "player-path\t: " + m_playerPath + "\n";
+    radio += "player-port\t: " + std::to_string(m_playerPort) + "\n";
+    radio += "player-file\t: " + m_playerFile + "\n";
+    radio += "player-md\t: " + m_playerMeta + "\n";
+    radio += "player-err\t: " + std::to_string(m_playerStderr) + "\n";
+    radio += "started\t: " + std::to_string(m_active) + "\n";
+    radio = radio + "##################################" + "\n";
+
+    return radio;
+}
+
 
 bool Radio::start_radio()
 {
@@ -99,7 +122,7 @@ bool Radio::start_radio()
 
         int err = execlp(
             "ssh", "ssh", m_host.c_str(),
-            "./player",
+            "player",
                 m_playerHost.c_str(),
                 m_playerPath.c_str(),
                 player_port.c_str(),
@@ -222,12 +245,12 @@ void Session::parse(std::string message)
     items = sscanf(message.c_str(), "%9s %4095s %4095s %4095s %hu %255s %hu %3s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 8) {
         if (strcmp(command, "START") != 0) {
-            send_session_message("ERROR: Invalid START command\n");
+            send_session_message("ERROR: Invalid START command");
             return;
         }
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
-            send_session_message("ERROR: Invalid meta data parameter [yes / no]\n");
+            send_session_message("ERROR: Invalid meta data parameter [yes / no]");
             return;
         }
 
@@ -236,20 +259,19 @@ void Session::parse(std::string message)
         bool started = radio->start_radio();
         if (!started) {
             remove_radio_by_id(radio->id());
-            send_session_message("ERROR: ssh failed\n");
+            send_session_message("ERROR: ssh failed");
             return;
         }
 
-        radio->print_radio();
+        debug_print("%s\n", radio->to_string().c_str());
 
         bool added = add_poll_fd(radio->player_stderr());
         if (!added) {
             remove_radio_by_id(radio->id());
-            send_session_message("ERROR: could not handle descriptor\n");
+            send_session_message("ERROR: could not handle descriptor");
         }
 
-        std::string msg = "OK " + radio->id() + "\n";
-        send_session_message(msg);
+        send_session_message("OK " + radio->id());
         return;
     }
 
@@ -257,34 +279,34 @@ void Session::parse(std::string message)
     items = sscanf(message.c_str(), "%9s %2s:%2s %u %4095s %4095s %4095s %hu %255s %hu %3s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
-            send_session_message("ERROR: Invalid AT command\n");
+            send_session_message("ERROR: Invalid AT command");
             return;
         }
 
         if ((strlen(hour) != 2) || (strlen(minute) != 2)) {
-            send_session_message("ERROR: Invalid start hour or minute\n");
+            send_session_message("ERROR: Invalid start hour or minute");
             return;
         }
 
         short ihour = (((int)hour[0] - 48) * 10) + ((int)hour[1] - 48);
         short iminute = (((int)minute[0] - 48) * 10) + ((int)minute[1] - 48);
         if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
-            send_session_message("ERROR: Invalid start hour or minute\n");
+            send_session_message("ERROR: Invalid start hour or minute");
             return;
         }
 
         if (strcmp(file, "-") == 0) {
-            send_session_message("ERROR: Invalid file name\n");
+            send_session_message("ERROR: Invalid file name");
             return;
         }
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
-            send_session_message("ERROR: Invalid meta data parameter [yes / no]\n");
+            send_session_message("ERROR: Invalid meta data parameter [yes / no]");
             return;
         }
 
         auto radio = add_radio(computer, listen_port, ihour, iminute, interval, host, path, resource_port, file, meta_data);
-        radio->print_radio();
+        debug_print("%s\n", radio->to_string().c_str());
 
         time_t current_time = time(NULL);
         auto t = localtime(&current_time);
@@ -323,7 +345,7 @@ void Session::parse(std::string message)
             (strcmp(command, "PLAY") != 0) &&
             (strcmp(command, "TITLE") != 0) &&
             (strcmp(command, "QUIT") != 0)) {
-            send_session_message("ERROR: Invalid command\n");
+            send_session_message("ERROR: Invalid command");
             return;
         }
 
@@ -332,7 +354,7 @@ void Session::parse(std::string message)
 
             auto sent = radio->send_radio_command(std::string(command));
             if (!sent.first) {
-                send_session_message("ERROR " + radio->id() + ": could not send command to player. Probably not reachable.\n");
+                send_session_message("ERROR " + radio->id() + ": could not send command to player. Probably not reachable.");
                 remove_radio_by_id(radio->id());
                 return;
             }
@@ -343,7 +365,7 @@ void Session::parse(std::string message)
                 auto received = radio->recv_radio_response(sent.second);
 
                 if (!received.first) {
-                    send_session_message("ERROR " + radio->id() + ": title command timeout\n");
+                    send_session_message("ERROR " + radio->id() + ": title command timeout");
                     return;
                 }
 
@@ -355,17 +377,16 @@ void Session::parse(std::string message)
                 remove_radio_by_id(radio->id());
             }
 
-            msg += "\n";
             send_session_message(msg);
         } catch (const std::exception& e) {
-            send_session_message("ERROR: Player with provided [id] does not exists\n");
+            send_session_message("ERROR: Player with provided [id] does not exists");
             return;
         }
 
         return;
     }
 
-    send_session_message("ERROR: Invalid command\n");
+    send_session_message("ERROR: Invalid command");
     return;
 }
 
@@ -445,7 +466,8 @@ void Session::remove_radio_by_id(const std::string& id)
 
 bool Session::send_session_message(const std::string& message) const
 {
-    auto msg = message.c_str();
+    std::string full_message = message + "\r\n";
+    auto msg = full_message.c_str();
 
     size_t to_sent = 0;
     while (to_sent != strlen(msg)) {
@@ -510,14 +532,14 @@ void Session::handle_timeout()
             bool started = radio->start_radio();
             if (!started) {
                 remove_radio_by_id(radio->id());
-                send_session_message("ERROR: ssh failed\n");
+                send_session_message("ERROR: ssh failed");
                 return;
             }
 
             bool added = add_poll_fd(radio->player_stderr());
             if (!added) {
                 remove_radio_by_id(radio->id());
-                send_session_message("ERROR: could not handle descriptor\n");
+                send_session_message("ERROR: could not handle descriptor");
                 return;
             }
         } else if (event.action == SEND_QUIT) {
