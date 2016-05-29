@@ -68,7 +68,9 @@ void* handle_commands(void *arg)
 
         ssize_t bytes_received = recvfrom(command_socket, &command, sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
-            // syserr("read() handle_commands");
+            if (player_on) {
+                syserr("recvfrom() handle_commands");
+            }
         } else if (bytes_received == 0) {
             debug_print("%s\n", "recieved nothing...");
         } else {
@@ -127,10 +129,6 @@ int set_command_socket()
     if (sock < 0) {
         syserr("socket() failed");
     }
-
-    err = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
-    if (err < 0)
-        syserr("fcntl() failed");
 
     // binding the listening socket
     debug_print("command port: %d\n", command_port);

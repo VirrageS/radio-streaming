@@ -80,7 +80,7 @@ void handle_session(std::shared_ptr<Session> session)
 
                     for (auto radio : session->radios()) {
                         if (radio->player_stderr() == descriptor->fd) {
-                            std::string msg = "ERROR " + radio->id() + ": " + std::string(buffer, bytes_recieved) + "\n";
+                            std::string msg = "ERROR " + radio->id() + ": " + std::string(buffer, bytes_recieved + 1) + "\n";
 
                             session->send_session_message(msg);
                             session->remove_radio_by_id(radio->id());
