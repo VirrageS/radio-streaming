@@ -10,6 +10,8 @@
 
 #include <signal.h>
 
+#include <iterator>
+
 #include "misc.h"
 #include "session.hh"
 
@@ -146,7 +148,10 @@ void handle_session(std::shared_ptr<Session> session)
                                         }
 
                                         found = true;
-                                        message.erase(message.cbegin() + i, message.cbegin() + i + to_remove);
+
+                                        auto first = message.begin(); std::advance(first, i);
+                                        auto last = message.begin(); std::advance(last, i + to_remove);
+                                        message.erase(first, last);
                                         break;
                                     }
                                 }
