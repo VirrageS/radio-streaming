@@ -108,6 +108,7 @@ static int write_to_file(stream_t *stream, size_t bytes_count)
         if (bytes_count == 0)
             return 0;
 
+        debug_print("writing: %zu\n", bytes_count);
         size_t bytes_written = fwrite(&stream->buffer[0], sizeof(char), (size_t)bytes_count, stream->output_file);
         if (bytes_written != bytes_count) {
             syserr("Failed to write to file or stdout\n");
@@ -123,15 +124,15 @@ static int write_to_file(stream_t *stream, size_t bytes_count)
 
 int print_header(header_t *header)
 {
-    printf("##################################\n");
-    printf("Name\t: %s\n", header->icy_name);
-    printf("icy-notice1\t: %s\n", header->icy_notice1);
-    printf("icy-notice2\t: %s\n", header->icy_notice2);
-    printf("Genre\t: %s\n", header->icy_genre);
-    //printf("Public\t: %s\n", (header->icy_pub?"yes":"no"));
-    printf("Bitrate : %s kbit/s\n", header->icy_br);
-    printf("metaint\t: %d\n", header->metaint);
-    printf("##################################\n");
+    debug_print("%s\n", "##################################");
+    debug_print("Name\t: %s\n", header->icy_name);
+    debug_print("icy-notice1\t: %s\n", header->icy_notice1);
+    debug_print("icy-notice2\t: %s\n", header->icy_notice2);
+    debug_print("Genre\t: %s\n", header->icy_genre);
+    //debug_print("Public\t: %s\n", (header->icy_pub?"yes":"no"));
+    debug_print("Bitrate : %s kbit/s\n", header->icy_br);
+    debug_print("metaint\t: %d\n", header->metaint);
+    debug_print("%s\n", "##################################");
     return 0;
 }
 
@@ -143,7 +144,7 @@ int parse_header(stream_t *stream)
         debug_print("socket: %d; buffer_size: %zu\n", stream->socket, sizeof(stream->buffer) - stream->in_buffer);
         ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
         if (bytes_received < 0) {
-            syserr("poll_recv() failed");
+            syserr("poll_recv() failed - parse_header");
         } else if (bytes_received == 0) {
             return -1;
         } else {
@@ -182,15 +183,16 @@ int parse_header(stream_t *stream)
 }
 
 
-int check_metadata(stream_t *stream)
+static ssize_t check_metadata(stream_t *stream)
 {
     // check if we should parse any meta data
-    if (!stream->meta_data)
-        return 0;
+    if (!stream->meta_data) {
+        return stream->in_buffer;
+    }
 
     if (stream->current_interval >= stream->in_buffer) {
         stream->current_interval -= stream->in_buffer;
-        return 0;
+        return stream->in_buffer;
     }
 
     // write until header
@@ -204,17 +206,15 @@ int check_metadata(stream_t *stream)
 
     // if metadata empty we move on
     if (metadata_length == 0) {
-        stream->current_interval = stream->header.metaint - stream->in_buffer;
-        return 0;
+        goto end_checking;
     }
 
     // if there is not enough data in buffer we should read more...
     while (metadata_length > stream->in_buffer) {
         ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
         if (bytes_received < 0) {
-            syserr("poll_recv() failed");
+            syserr("poll_recv() failed - parse_metadata");
         } else if (bytes_received == 0) {
-            debug_print("%s\n", "not recieving anything (metadata)...");
             return -1;
         } else {
             stream->in_buffer += bytes_received;
@@ -231,9 +231,15 @@ int check_metadata(stream_t *stream)
 
     remove_from_buffer(stream, metadata_length);
 
+end_checking:
     // update current interval between next header
+    if (stream->in_buffer > stream->header.metaint) {
+        stream->current_interval = 0;
+        return stream->header.metaint;
+    }
+
     stream->current_interval = stream->header.metaint - stream->in_buffer;
-    return 0;
+    return stream->in_buffer;
 }
 
 
@@ -241,17 +247,19 @@ int parse_data(stream_t *stream)
 {
     ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
     if (bytes_received < 0) {
-        syserr("poll_recv() failed");
+        syserr("poll_recv() failed - parse_data");
     } else if (bytes_received == 0) {
         return -1;
     } else {
         stream->in_buffer += bytes_received;
 
-        int err = check_metadata(stream);
-        if (err < 0)
-            return -1;
+        while (stream->in_buffer > 0) {
+            ssize_t bytes_to_write = check_metadata(stream);
+            if (bytes_to_write < 0)
+                return -1;
 
-        write_to_file(stream, stream->in_buffer);
+            write_to_file(stream, bytes_to_write);
+        }
     }
 
     return 0;

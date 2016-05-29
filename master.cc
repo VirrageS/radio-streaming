@@ -6,6 +6,7 @@
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
+#include <fcntl.h>
 
 #include <signal.h>
 

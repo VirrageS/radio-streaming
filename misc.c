@@ -31,12 +31,12 @@ ssize_t poll_recv(int socket, char* buffer, size_t bytes)
 
     struct pollfd poll_socket[1];
     poll_socket[0].fd = socket;
-    poll_socket[0].events = POLLIN | POLLHUP;
+    poll_socket[0].events = POLLIN;
 
     int err = poll(poll_socket, 1, 5000);
-    if (err <= 0)
+    if (err <= 0) {
         return -1;
-    else {
+    } else {
         bytes_received = recv(socket, buffer, bytes, 0);
     }
 

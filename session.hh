@@ -118,8 +118,6 @@ public:
         buffer.clear();
 
         close(m_socket);
-
-        debug_print("%s\n", "session destructor");
     }
 
     std::string id() const { return m_id; }

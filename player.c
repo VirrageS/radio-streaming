@@ -128,6 +128,10 @@ int set_command_socket()
         syserr("socket() failed");
     }
 
+    err = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
+    if (err < 0)
+        syserr("fcntl() failed");
+
     // binding the listening socket
     debug_print("command port: %d\n", command_port);
     memset(&server_address, 0, sizeof(server_address));
@@ -149,10 +153,7 @@ void stream_listen()
     if (parse_header(&stream) < 0)
         player_on = false;
 
-    if (DEBUG) {
-        print_header(&stream.header);
-    }
-
+    print_header(&stream.header);
     debug_print("%s\n", "stream is listening");
 
     // command 'QUIT' can turn off player
