@@ -73,7 +73,9 @@ Radio::Radio(const char *host, unsigned long port, unsigned short hour,
 
 Radio::~Radio()
 {
-    send_radio_command("QUIT");
+    if (m_started)
+        send_radio_command("QUIT");
+
     close(m_playerStderr);
 }
 

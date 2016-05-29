@@ -68,19 +68,23 @@ void handle_session(std::shared_ptr<Session> session)
                 if (descriptor->fd != session->socket()) {
                     // we got message on player stderr
                     // so we should delete this
+                    std::string buffer = "";
 
-                    char buffer[1024];
-                    ssize_t bytes_recieved = read(descriptor->fd, buffer, sizeof(buffer));
-                    if (bytes_recieved <= 0)
-                        bytes_recieved = 0;
+                    while (true) {
+                        std::vector<char> tmp_buffer(4096);
+                        ssize_t bytes_recieved = read(descriptor->fd, tmp_buffer.data(), tmp_buffer.size() - 1);
+                        if (bytes_recieved <= 0)
+                            break;
 
-                    buffer[bytes_recieved] = '\0';
+                        tmp_buffer.resize(bytes_received);
+                        buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
+                    }
 
                     debug_print("%s\n", "got something on player stderr");
 
                     for (auto radio : session->radios()) {
                         if (radio->player_stderr() == descriptor->fd) {
-                            std::string msg = "ERROR " + radio->id() + ": " + std::string(buffer, bytes_recieved + 1) + "\n";
+                            std::string msg = "ERROR " + radio->id() + ": " + buffer + "\n";
 
                             session->send_session_message(msg);
                             session->remove_radio_by_id(radio->id());
