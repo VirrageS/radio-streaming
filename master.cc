@@ -148,10 +148,7 @@ void handle_session(std::shared_ptr<Session> session)
                                         }
 
                                         found = true;
-
-                                        auto first = message.begin(); std::advance(first, i);
-                                        auto last = message.begin(); std::advance(last, i + to_remove);
-                                        message.erase(first, last);
+                                        message.erase(std::next(message.begin(), i), std::next(message.begin, i + to_remove));
                                         break;
                                     }
                                 }
