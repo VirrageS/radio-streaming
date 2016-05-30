@@ -148,7 +148,7 @@ void handle_session(std::shared_ptr<Session> session)
                                         }
 
                                         found = true;
-                                        message.erase(std::next(message.begin(), i), std::next(message.begin, i + to_remove));
+                                        message.erase(std::next(message.begin(), i), std::next(message.begin(), i + to_remove));
                                         break;
                                     }
                                 }
