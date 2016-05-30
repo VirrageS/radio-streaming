@@ -122,7 +122,7 @@ bool Radio::start_radio()
 
         int err = execlp(
             "ssh", "ssh", m_host.c_str(),
-            "player",
+            "./player", // #TODO remove this
                 m_playerHost.c_str(),
                 m_playerPath.c_str(),
                 player_port.c_str(),
