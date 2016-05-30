@@ -78,6 +78,12 @@ public:
         @returns: Current state of player.
         **/
     bool active() const { return m_active; }
+
+    /**
+        Set player state (active or not).
+
+        @param active: True if player is active, false otherwise.
+        **/
     void active(bool active) { m_active = active; }
 
     /**
@@ -87,28 +93,43 @@ public:
         **/
     bool start_radio();
 
+    /**
+        Send command to player.
+
+        @param message: Message which we want to save.
+        @returns: Pair <bool, int> if bool is true it indicates that send was successful
+                  and socket is returned, false otherwise.
+        **/
     std::pair<bool, int> send_radio_command(std::string message);
+
+    /**
+        Receive command from player.
+
+        @param socket: Socket on which we want to listen for response.
+        @returns: Pair <bool, string> if bool is true it indicates that receive was successful
+                  and message is returned, false otherwise.
+        **/
     std::pair<bool, std::string> recv_radio_response(int socket);
 
 
 private:
-    std::string m_id;
-    bool m_active;
+    std::string m_id; // player id
+    bool m_active; // state of player, true if it is running, false othwerwise
 
-    int m_playerStderr;
+    int m_playerStderr; // player stderr descriptor
 
-    std::string m_host;
-    unsigned long m_port;
+    std::string m_host; // host on which player should be run
+    unsigned long m_port; // port on which player will listen and receive commands
 
-    std::string m_playerHost;
-    std::string m_playerPath;
-    unsigned long m_playerPort;
-    std::string m_playerFile;
-    std::string m_playerMeta;
+    std::string m_playerHost; // host on which player will be listening for ICY data.
+    std::string m_playerPath; // path to resource on which player will be listening for ICY data.
+    unsigned long m_playerPort; // port on which player will connect to ICY server.
+    std::string m_playerFile; // file to which player will save data ("-" will make player to send data on stdout).
+    std::string m_playerMeta; // checks if we should ask for metadata or not.
 
-    unsigned short m_hour;
-    unsigned short m_minute;
-    unsigned int m_interval;
+    unsigned short m_hour; // hour at which player should be started.
+    unsigned short m_minute; // minute at which player shoule be started.
+    unsigned int m_interval; // how long should player been listening to data (in minutes).
 };
 
 class Session {
@@ -190,7 +211,6 @@ public:
         @param player_port: Port on which player will connect to ICY server.
         @param player_file: File to which player will save data ("-" will make player to send data on stdout).
         @param player_md: Checks if we should ask for metadata or not.
-
         @returns: Radio with parameters.
         **/
     std::shared_ptr<Radio> add_radio(const char *host, unsigned long port, unsigned short hour,

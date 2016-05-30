@@ -22,7 +22,9 @@ static bool is_cr_present(char *str, int pos)
         return false;
 }
 
-
+/**
+    Get field from header.
+    **/
 static int get_http_header_field(char *header, const char* field, char* value)
 {
     char *occurrence = strstr(header, field);
@@ -48,7 +50,9 @@ static int get_http_header_field(char *header, const char* field, char* value)
     return -1;
 }
 
-
+/**
+    Extract header from buffer.
+    **/
 static int extract_header_fields(header_t *header, char *buffer)
 {
     int err;
@@ -80,7 +84,9 @@ static int extract_header_fields(header_t *header, char *buffer)
     return 0;
 }
 
-
+/**
+    Get field from metadata
+    **/
 static int get_metadata_field(char *metadata, const char* field, char* value)
 {
     char *split = strtok(metadata, ";");
@@ -107,6 +113,9 @@ static int get_metadata_field(char *metadata, const char* field, char* value)
 }
 
 
+/**
+    Remove bytes from buffer
+    **/
 static int remove_from_buffer(stream_t *stream, size_t bytes_count)
 {
     stream->in_buffer -= bytes_count;
