@@ -238,11 +238,10 @@ void Session::parse(std::string message)
 
     // PARSE COMMAND
     char command[10], hour[3], minute[3], computer[4096], host[4096], path[4096], file[256], meta_data[4], id[256];
-    unsigned short resource_port, listen_port;
-    unsigned int interval;
+    int interval, resource_port, listen_port;
 
     // "START" COMMAND
-    items = sscanf(message.c_str(), "%9s %4095s %4095s %4095s %hu %255s %hu %3s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%9s %4095s %4095s %4095s %d %255s %d %3s", command, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 8) {
         if (strcmp(command, "START") != 0) {
             send_session_message("ERROR: Invalid START command");
@@ -251,6 +250,11 @@ void Session::parse(std::string message)
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
             send_session_message("ERROR: Invalid meta data parameter [yes / no]");
+            return;
+        }
+
+        if ((listen_port <= 0) || (resource_port <= 0) || (listen_port > 65538) || (resource_port > 65538)) {
+            send_session_message("ERROR: Invalid port");
             return;
         }
 
@@ -276,7 +280,7 @@ void Session::parse(std::string message)
     }
 
     // "AT" COMMAND
-    items = sscanf(message.c_str(), "%9s %2s:%2s %u %4095s %4095s %4095s %hu %255s %hu %3s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
+    items = sscanf(message.c_str(), "%9s %2s.%2s %d %4095s %4095s %4095s %d %255s %d %3s", command, hour, minute, &interval, computer, host, path, &resource_port, file, &listen_port, meta_data);
     if (items == 11) {
         if (strcmp(command, "AT") != 0) {
             send_session_message("ERROR: Invalid AT command");
@@ -290,8 +294,13 @@ void Session::parse(std::string message)
 
         short ihour = (((int)hour[0] - 48) * 10) + ((int)hour[1] - 48);
         short iminute = (((int)minute[0] - 48) * 10) + ((int)minute[1] - 48);
-        if ((ihour < 0) || (ihour > 24) || (iminute < 0) || (iminute >= 60)) {
+        if ((ihour < 0) || (ihour >= 24) || (iminute < 0) || (iminute >= 60)) {
             send_session_message("ERROR: Invalid start hour or minute");
+            return;
+        }
+
+        if (interval <= 0) {
+            send_session_message("ERROR: Invalid interval parameter");
             return;
         }
 
@@ -302,6 +311,11 @@ void Session::parse(std::string message)
 
         if ((strcmp(meta_data, "yes") != 0) && (strcmp(meta_data, "no") != 0)) {
             send_session_message("ERROR: Invalid meta data parameter [yes / no]");
+            return;
+        }
+
+        if ((listen_port <= 0) || (resource_port <= 0) || (listen_port > 65538) || (resource_port > 65538)) {
+            send_session_message("ERROR: Invalid port");
             return;
         }
 
@@ -317,6 +331,7 @@ void Session::parse(std::string message)
 
         current_time += (ihour - t->tm_hour) * 3600;
         current_time += (iminute - t->tm_min) * 60;
+        current_time -= t->tm_sec;
 
         debug_print("current %ld; starts at: %ld\n", time(NULL), current_time);
 
@@ -355,7 +370,6 @@ void Session::parse(std::string message)
             auto sent = radio->send_radio_command(std::string(command));
             if (!sent.first) {
                 send_session_message("ERROR " + radio->id() + ": could not send command to player. Probably not reachable.");
-                remove_radio_by_id(radio->id());
                 return;
             }
 
