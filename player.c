@@ -41,7 +41,8 @@ typedef enum {
 void clean_all()
 {
     if (save_to_file) {
-        fclose(stream.output_file);
+        if (stream.output_file != NULL)
+            fclose(stream.output_file);
     }
 
     close(stream.socket);
