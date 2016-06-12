@@ -117,20 +117,8 @@ bool Radio::start_radio()
         close(err_pipe[0]);
         dup2(err_pipe[1], 2);
 
-        std::string player_port = std::to_string(m_playerPort);
-        std::string port = std::to_string(m_port);
-
-        int err = execlp(
-            "ssh", "ssh", m_host.c_str(),
-            "player",
-                m_playerHost.c_str(),
-                m_playerPath.c_str(),
-                player_port.c_str(),
-                m_playerFile.c_str(),
-                port.c_str(),
-                m_playerMeta.c_str(),
-            NULL
-        );
+        std::string player = "bash -l -c 'player " + m_playerHost + " " + m_playerPath + " " + std::to_string(m_playerPort) + " " + m_playerFile + " " + std::to_string(m_port) + " " + m_playerMeta.c_str() + "'";
+        int err = execlp("ssh", "ssh", m_host.c_str(), player.c_str(), NULL);
 
         if (err < 0) {
             char msg[] = "SSH failed\n";
