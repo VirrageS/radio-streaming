@@ -224,13 +224,20 @@ int parse_header(stream_t *stream)
     debug_print("%s\n", "parsing header...");
 
     while (true) {
-        debug_print("socket: %d; buffer_size: %zu\n", stream->socket, sizeof(stream->buffer) - stream->in_buffer);
-        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
+        debug_print("socket: %d; buffer_size: %zu\n", stream->socket, stream->buffer_size - stream->in_buffer);
+        ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], stream->buffer_size - stream->in_buffer);
         if (bytes_received <= 0) {
             return -1;
         } else {
             ssize_t parse_point = -1;
             stream->in_buffer += bytes_received;
+
+            if (stream->in_buffer + 1 >= stream->buffer_size) {
+                stream->buffer = realloc(stream->buffer, stream->buffer_size * 2 + 1);
+
+                if (stream->buffer == NULL)
+                    return -1;
+            }
 
             for (size_t i = 3; i < stream->in_buffer; ++i) {
                 if (stream->buffer[i-3] == '\r' && stream->buffer[i-2] == '\n' && stream->buffer[i-1] == '\r' && stream->buffer[i] == '\n') {
@@ -263,7 +270,7 @@ int parse_header(stream_t *stream)
 
 int parse_data(stream_t *stream)
 {
-    ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], sizeof(stream->buffer) - stream->in_buffer);
+    ssize_t bytes_received = poll_recv(stream->socket, &stream->buffer[stream->in_buffer], stream->buffer_size - stream->in_buffer);
     if (bytes_received > 0) {
         stream->in_buffer += bytes_received;
 

@@ -17,7 +17,8 @@ void stream_init(stream_t *stream, FILE* file, bool meta_data)
 
     stream->current_interval = 0;
     stream->in_buffer = 0;
-    memset(stream->buffer, 0, sizeof(stream->buffer));
+    stream->buffer_size = 1000;
+    stream->buffer = realloc(stream->buffer, stream->buffer_size);
 
     memset(stream->title, 0, sizeof(stream->title));
     stream->title[0] = '\0';

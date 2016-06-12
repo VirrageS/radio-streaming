@@ -18,13 +18,12 @@ typedef struct
     unsigned long metaint; // MP3 data bytes between metadata blocks
 } header_t;
 
-
-#define MAX_BUFFER 100000
 #define MAX_METADATA_LENGTH 5000
 
 typedef struct {
     size_t in_buffer; // stores how many data is in buffer
-    char buffer[MAX_BUFFER]; // buffer in which we store all the data
+    size_t buffer_size; // number of allocated memory for buffer
+    char* buffer; // buffer in which we store all the data
 
     bool meta_data; // should we parse meta data or not
 

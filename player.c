@@ -45,6 +45,7 @@ void clean_all()
             fclose(stream.output_file);
     }
 
+    free(stream.buffer);
     close(stream.socket);
     close(command_socket);
 }
