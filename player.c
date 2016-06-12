@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
 
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -137,9 +138,14 @@ int set_command_socket()
     struct sockaddr_in server_address;
 
     // creating IPv4 UDP socket
-    int sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         syserr("socket() failed");
+    }
+
+    err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int));
+    if (err < 0) {
+        syserr("setsockopt(SO_REUSEPORT) failed");
     }
 
     // binding the listening socket
@@ -202,23 +208,33 @@ FILE* validate_parameters(int argc, char *argv[])
 
     // validate ports
     server_port_str = argv[3];
+    for (int i = 0; i < strlen(server_port_str); ++i) {
+        if (!isdigit(server_port_str[i]))
+            fatal("Invalid number.");
+    }
+
     long int tmp_port = strtol(server_port_str, NULL, 10);
     if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
-        fatal("Port (%s) should be number larger than 0.\n", server_port_str);
+        fatal("Port (%s) should be number larger than 0.", server_port_str);
     }
     server_port = (uint16_t)tmp_port;
 
-    // command_port_str = argv[5];
-    tmp_port = strtol(argv[5], NULL, 10);
-    debug_print("tmp_port: (%s) %ld\n", argv[5], tmp_port);
+    char *command_port_str = argv[5];
+    for (int i = 0; i < strlen(command_port_str); ++i) {
+        if (!isdigit(command_port_str[i]))
+            fatal("Invalid number.");
+    }
+
+    tmp_port = strtol(command_port_str, NULL, 10);
+    debug_print("tmp_port: (%s) %ld\n", command_port_str, tmp_port);
     if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
-        fatal("Port (%s) should be number larger than 0.\n", argv[5]);
+        fatal("Port (%s) should be number larger than 0.", argv[5]);
     }
     command_port = (uint16_t)tmp_port;
 
     // validate meta data parameter
     if (strtob(&meta_data, argv[6]) != 0) {
-        fatal("Meta data (%s) should be 'yes' or 'no'.\n", argv[6]);
+        fatal("Meta data (%s) should be 'yes' or 'no'.", argv[6]);
     }
 
     FILE* output_file;
@@ -226,7 +242,7 @@ FILE* validate_parameters(int argc, char *argv[])
         output_file = fopen(file_name, "wb");
 
         if (!output_file) {
-            fatal("Could not create (%s) file.\n", file_name);
+            fatal("Could not create (%s) file.", file_name);
         }
     } else {
         debug_print("%s\n", "printing to stdout");

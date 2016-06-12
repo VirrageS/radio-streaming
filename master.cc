@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -228,9 +229,15 @@ void validate_parameters(int argc, char* argv[])
     if (argc == 2) {
         // validate ports
         master_port_str = argv[1];
+
+        for (int i = 0; i < strlen(master_port_str); ++i) {
+            if (!isdigit(master_port_str[i]))
+                fatal("Invalid number.");
+        }
+
         long int tmp_port = strtol(master_port_str, NULL, 10);
         if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
-            fatal("Port (%s) should be number larger than 0.\n", master_port_str);
+            fatal("Port (%s) should be number larger than 0.", master_port_str);
         }
 
         master_port = (uint16_t)tmp_port;
