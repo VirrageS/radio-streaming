@@ -1,68 +1,103 @@
 #ifndef __STREAM_H__
 #define __STREAM_H__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <stdbool.h>
+#include <string>
+#include <ostream>
+#include <algorithm>
+#include <memory>
 
-typedef struct
+
+enum StateTypes {
+    PARSE_HEADER,
+    PARSE_DATA,
+    PARSE_METADATA
+};
+
+
+struct Header
 {
-    char icy_name[500]; // name of stream
-    char icy_notice1[500];
-    char icy_notice2[500];
-    char icy_genre[255];
-    char icy_pub[10];
-    char icy_br[10]; // bitrate
+    std::string icy_name; // name of stream
+    std::string icy_notice1;
+    std::string icy_notice2;
+    std::string icy_genre;
+    std::string icy_pub;
+    std::string icy_bitrate;
+    unsigned long icy_metaint; // MP3 data bytes between metadata blocks
 
-    unsigned long metaint; // MP3 data bytes between metadata blocks
-} header_t;
+    std::string to_string() const;
+};
 
-#define MAX_METADATA_LENGTH 5000
 
-typedef struct {
-    size_t in_buffer; // stores how many data is in buffer
-    size_t buffer_size; // number of allocated memory for buffer
-    char* buffer; // buffer in which we store all the data
+class Stream
+{
+public:
 
-    bool meta_data; // should we parse meta data or not
+    Stream();
+    Stream(FILE* stream, bool metadata);
+    Stream(const Stream& other);
 
-    int socket; // socket on which we listen to ICY-Data
-    FILE *output_file; // file to which we should write our data
+    Stream& operator=(Stream other)
+    {
+        std::swap(stream_, other.stream_);
+        std::swap(buffer_, other.buffer_);
+        std::swap(socket_, other.socket_);
+        std::swap(header_, other.header_);
+        std::swap(current_interval_, other.current_interval_);
+        std::swap(metadata_length_, other.metadata_length_);
+        std::swap(title_, other.title_);
+        std::swap(state_, other.state_);
 
-    header_t header; // paresed ICY-Header
+        return *this;
+    }
 
-    unsigned int current_interval; // stores length of data to next ICY-MetaData header
-    char title[MAX_METADATA_LENGTH];
+    virtual ~Stream() noexcept;
 
-    volatile bool stream_on; // check if stream is "playing" or "paused"
-} stream_t;
+    bool paused() const { return paused_; }
+    void paused(bool paused) { paused_ = paused; }
+    bool quiting() const { return quiting_; }
+    void quiting(bool quiting) { quiting_ = quiting; }
 
-/**
-    Initialize stream.
+    std::string title() const { return title_; }
 
-    @param stream: Pointer to stream which we want to initialize.
-    @param file: Pointer to file to which we write all mp3 data.
-    @param meta_data: Value which determines if we should parse meta data.
-    **/
-void stream_init(stream_t *stream, FILE* file, bool meta_data);
+    bool SendRequest(const std::string& path);
 
-/**
-    Send request for listening ICY stream.
+    /**
+        Set client socket for stream. Connects to ICY server on `host` and `port`.
 
-    @param stream: Stream on which we want to listen.
-    @param path: Path on which are resources on http.
-    **/
-int send_stream_request(const stream_t *stream, const char* path);
+        @param stream: Stream on which we want to make connection.
+        @param host: Host on which ICY server is listening.
+        @param port: Port on which ICY server is listening.
+        @returns: 0 if connection was successful, -1 otherwise.
+        **/
+    int InitializeSocket(std::string host, std::string port);
 
-/**
-    Set client socket for stream. Connects to ICY server on `host` and `port`.
+    void Listen();
 
-    @param stream: Stream on which we want to make connection.
-    @param host: Host on which ICY server is listening.
-    @param port: Port on which ICY server is listening.
-    @returns: 0 if connection was successful, -1 otherwise.
-    **/
-int set_stream_socket(stream_t *stream, const char* host, const char* port);
+
+private:
+    void ParseData();
+    void WriteToStream(size_t bytes_count);
+    bool ExtractHeaderFields();
+
+
+private:
+    FILE* stream_;
+    std::string buffer_; // buffer in which we store all the data
+
+    int socket_; // socket on which we listen to ICY-Data
+
+    Header header_; // paresed ICY-Header
+
+    unsigned int current_interval_; // stores length of data to next ICY-MetaData header
+    unsigned int metadata_length_;
+    std::string title_; // current ICY-Title
+
+    StateTypes state_;
+
+    bool metadata_;
+
+    std::atomic_bool paused_; // check if stream is "playing" or "paused"
+    std::atomic_bool quiting_; // check if stream is quiting
+};
 
 #endif

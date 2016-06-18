@@ -14,7 +14,7 @@
 
 #include <algorithm>
 
-#include "session.hh"
+#include "session.h"
 
 class RadioNotFoundException: public std::exception
 {
@@ -136,7 +136,7 @@ bool Radio::start_radio()
 }
 
 
-std::pair<bool, int> Radio::send_radio_command(std::string message)
+std::pair<bool, int> Radio::send_radio_command(const std::string& message)
 {
     // player is not active yet... or anymore
     if (!m_active) {

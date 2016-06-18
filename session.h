@@ -37,7 +37,7 @@ public:
           unsigned short minute, unsigned int interval, const char *player_host,
           const char *player_path, unsigned long player_port, const char *player_file,
           const char *player_md);
-    ~Radio();
+    virtual ~Radio();
 
     /**
         Convert player to string.
@@ -100,7 +100,7 @@ public:
         @returns: Pair <bool, int> if bool is true it indicates that send was successful
                   and socket is returned, false otherwise.
         **/
-    std::pair<bool, int> send_radio_command(std::string message);
+    std::pair<bool, int> send_radio_command(const std::string& message);
 
     /**
         Receive command from player.
@@ -146,7 +146,7 @@ public:
         m_socket = socket;
     }
 
-    ~Session()
+    virtual ~Session()
     {
         for (auto r : m_radios) {
             r->send_radio_command("QUIT");
@@ -285,7 +285,7 @@ class Sessions {
 public:
     Sessions() {}
 
-    ~Sessions() {
+    virtual ~Sessions() {
         m_sessions.clear();
         m_sessions.shrink_to_fit();
     }

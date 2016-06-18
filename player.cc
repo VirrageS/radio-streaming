@@ -1,12 +1,12 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <ostream>
+#include <csignal>
+#include <thread>
+
 #include <unistd.h>
-#include <fcntl.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <limits.h>
-#include <ctype.h>
+#include <sys/socket.h>
 
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -15,25 +15,17 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include <signal.h>
-#include <pthread.h>
-
 #include "misc.h"
 #include "stream.h"
-#include "parser.h"
 
 
 // GLOBALS
 char *host, *path, *file_name, *server_port_str, *command_port_str;
 uint16_t server_port, command_port;
-bool meta_data, save_to_file = true;
+bool metadata, save_to_file = true;
 
-stream_t stream;
-volatile bool player_on;
-
-int command_socket;
-
-pthread_t command_thread;
+Stream g_stream;
+int g_command_socket;
 
 typedef enum {
     TITLE, PLAY, PAUSE, QUIT, NONE
@@ -41,14 +33,7 @@ typedef enum {
 
 void clean_all()
 {
-    if (save_to_file) {
-        if (stream.output_file != NULL)
-            fclose(stream.output_file);
-    }
-
-    free(stream.buffer);
-    close(stream.socket);
-    close(command_socket);
+    close(g_command_socket);
 }
 
 
@@ -61,22 +46,20 @@ void handle_signal(int sig)
 /**
     Function for thread which handle commands.
     **/
-void* handle_commands(void *arg)
+void HandleCommands()
 {
     // get command
     char command[10];
 
     debug_print("%s\n", "handling command thread started...");
 
-    while (player_on) {
+    while (!g_stream.quiting()) {
         struct sockaddr_in client;
         int client_len = sizeof(client);
 
-        ssize_t bytes_received = recvfrom(command_socket, &command, sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
+        ssize_t bytes_received = recvfrom(g_command_socket, &command, sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
-            if (player_on) {
-                syserr("recvfrom() handle_commands");
-            }
+            syserr("recvfrom() handle_commands");
         } else if (bytes_received == 0) {
             debug_print("%s\n", "recieved nothing...");
         } else {
@@ -87,16 +70,17 @@ void* handle_commands(void *arg)
 
             if (strcmp(command, "TITLE") == 0) {
                 debug_print("%s\n", "sending current title");
-                sendto(command_socket, stream.title, strlen(stream.title), 0, (struct sockaddr *)&client, (socklen_t)client_len);
+                std::string title = g_stream.title();
+                sendto(g_command_socket, title.c_str(), title.length(), 0, (struct sockaddr *)&client, (socklen_t)client_len);
             } else if (strcmp(command, "PAUSE") == 0) {
                 debug_print("%s\n", "stream paused");
-                stream.stream_on = false;
+                g_stream.paused(true);
             } else if (strcmp(command, "PLAY") == 0) {
                 debug_print("%s\n", "stream play");
-                stream.stream_on = true;
+                g_stream.paused(false);
             } else if (strcmp(command, "QUIT") == 0) {
                 debug_print("%s\n", "quiting now");
-                player_on = false;
+                g_stream.quiting(true);
             }
 
             memset(&command, 0, sizeof(command));
@@ -104,35 +88,13 @@ void* handle_commands(void *arg)
     }
 
     debug_print("%s\n", "closing handling commands...");
-    return 0;
-}
-
-/**
-    Start thread for command listener.
-    **/
-void start_command_listener()
-{
-    int err;
-
-    err = pthread_create(&command_thread, 0, handle_commands, NULL);
-    if (err < 0) {
-        syserr("pthread_create");
-    }
-
-
-    err = pthread_detach(command_thread);
-    if (err < 0) {
-        syserr("pthread_detach");
-    }
-
-    debug_print("%s\n", "command listener just have started");
 }
 
 
 /**
     Set socket for command listener.
     **/
-int set_command_socket()
+void set_command_socket()
 {
     int err = 0;
     struct sockaddr_in server_address;
@@ -143,7 +105,8 @@ int set_command_socket()
         syserr("socket() failed");
     }
 
-    err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int));
+    int opt = 1;
+    err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(int));
     if (err < 0) {
         syserr("setsockopt(SO_REUSEPORT) failed");
     }
@@ -160,33 +123,7 @@ int set_command_socket()
         syserr("bind() failed");
     }
 
-    return sock;
-}
-
-
-/**
-    Listen to ICY server stream.
-    **/
-void stream_listen()
-{
-    if (parse_header(&stream) < 0)
-        syserr("Failed to get header...");
-
-    print_header(&stream.header);
-    debug_print("%s\n", "stream is listening");
-
-    // command 'QUIT' can turn off player
-    while (player_on) {
-        ssize_t bytes_received = parse_data(&stream);
-        if (bytes_received < 0) {
-            syserr("Parsing data failed");
-        } else if (bytes_received == 0) {
-            // check if stream radio has ended connection
-            player_on = false;
-        }
-    }
-
-    debug_print("%s\n", "stream is not listening");
+    g_command_socket = sock;
 }
 
 
@@ -233,13 +170,13 @@ FILE* validate_parameters(int argc, char *argv[])
     command_port = (uint16_t)tmp_port;
 
     // validate meta data parameter
-    if (strtob(&meta_data, argv[6]) != 0) {
+    if (strtob(&metadata, argv[6]) != 0) {
         fatal("Meta data (%s) should be 'yes' or 'no'.", argv[6]);
     }
 
     FILE* output_file;
     if (save_to_file) {
-        output_file = fopen(file_name, "wb");
+        output_file = std::fopen(file_name, "wb");
 
         if (!output_file) {
             fatal("Could not create (%s) file.", file_name);
@@ -255,21 +192,19 @@ FILE* validate_parameters(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    signal(SIGINT, handle_signal);
-    signal(SIGKILL, handle_signal);
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGKILL, handle_signal);
 
-    FILE* output_file = validate_parameters(argc, argv);
-    player_on = true;
+    auto output_file = validate_parameters(argc, argv);
 
-    command_socket = set_command_socket();
-    start_command_listener();
+    set_command_socket();
+    std::thread (HandleCommands).detach();
 
     // set player stream
-    stream_init(&stream, output_file, meta_data);
-    set_stream_socket(&stream, host, server_port_str);
-    send_stream_request(&stream, path);
-
-    stream_listen();
+    g_stream = Stream(output_file, metadata);
+    g_stream.InitializeSocket(host, server_port_str);
+    g_stream.SendRequest(path);
+    g_stream.Listen();
 
     clean_all();
 

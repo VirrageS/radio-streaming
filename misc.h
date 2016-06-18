@@ -34,7 +34,7 @@ int strtob(bool* b, const char* str);
     @param bytes: Number of bytes we want to maximally read.
     @returns: -1 if there was error, 0 if everything was good, bytes received otherwise.
     **/
-ssize_t poll_recv(int socket, char* buffer, size_t bytes);
+ssize_t PollRecv(int socket, std::string& buffer, unsigned int timeout);
 
 /**
     Wypisuje informację o błędnym zakończeniu funkcji systemowej

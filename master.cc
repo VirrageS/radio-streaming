@@ -14,13 +14,9 @@
 #include <iterator>
 
 #include "misc.h"
-#include "session.hh"
+#include "session.h"
 
-int master_socket;
-uint16_t master_port;
-char* master_port_str;
-
-Sessions sessions;
+Sessions g_sessions;
 
 void clean_all()
 {
@@ -168,20 +164,22 @@ void handle_session(std::shared_ptr<Session> session)
 
 end_session:
     debug_print("[%s] closing handling session...\n", session->id().c_str());
-    sessions.remove_session_by_id(session->id());
+    g_sessions.remove_session_by_id(session->id());
 }
 
 /**
     Set connection on TCP listen socket.
     **/
-void set_master_socket()
+int set_master_socket(int master_port)
 {
     int err, sock;
     struct sockaddr_in server;
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0)
-        syserr("socket() failed");
+    if (sock < 0) {
+        std::perror("socket() failed");
+        return EXIT_FAILURE;
+    }
 
     int opt = 1;
     err = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int));
@@ -212,36 +210,42 @@ void set_master_socket()
         std::cout << ntohs(server.sin_port) << std::endl;
     }
 
-    master_socket = sock;
+    return sock;
 }
 
 
 /**
     Validates program parameters
     **/
-void validate_parameters(int argc, char* argv[])
+uint16_t validate_parameters(int argc, char* argv[])
 {
     if (argc > 2)
         fatal("Usage ./%s <port>", argv[0]);
 
-    master_port = 0;
+    uint16_t master_port = 0;
 
     if (argc == 2) {
         // validate ports
-        master_port_str = argv[1];
-
-        for (int i = 0; i < strlen(master_port_str); ++i) {
-            if (!isdigit(master_port_str[i]))
+        std::string master_port_str(argv[1]);
+        for (char c : master_port_str) {
+            if (!isdigit(c)) {
                 fatal("Invalid number.");
+            }
         }
 
-        long int tmp_port = strtol(master_port_str, NULL, 10);
-        if ((tmp_port <= 0L) || (errno == ERANGE) || (tmp_port > 65535L)) {
-            fatal("Port (%s) should be number larger than 0.", master_port_str);
-        }
+        try {
+            auto tmp_port = stoul(master_port_str, NULL, 10);
+            if (tmp_port > 65535L) {
+                fatal("Invalid number.");
+            }
 
-        master_port = (uint16_t)tmp_port;
+            master_port = (uint16_t)tmp_port;
+        } catch (std::exception& e) {
+            fatal("Invalid number.");
+        }
     }
+
+    return master_port;
 }
 
 
@@ -252,8 +256,8 @@ int main(int argc, char* argv[])
 
     srand(time(NULL));
 
-    validate_parameters(argc, argv);
-    set_master_socket();
+    uint16_t master_port = validate_parameters(argc, argv);
+    int master_socket = set_master_socket(master_port);
 
     while (true) {
         int client_socket = accept(master_socket, NULL, NULL);
@@ -261,7 +265,7 @@ int main(int argc, char* argv[])
             syserr("accept() failed");
         }
 
-        auto session = sessions.add_session(client_socket);
+        auto session = g_sessions.add_session(client_socket);
         std::thread (handle_session, session).detach();
     }
 
