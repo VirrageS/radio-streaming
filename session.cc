@@ -21,7 +21,7 @@ class RadioNotFoundException: public std::exception
     virtual const char* what() const throw() {
         return "Radio has not been found";
     }
-} RadioNotFound;
+};
 
 static std::string generate_id()
 {
@@ -430,7 +430,7 @@ std::shared_ptr<Radio> Session::get_radio_by_id(const std::string& id)
         }
     }
 
-    throw RadioNotFound;
+    throw RadioNotFoundException();
 }
 
 

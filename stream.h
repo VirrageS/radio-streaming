@@ -7,6 +7,14 @@
 #include <memory>
 
 
+class ParseHeaderFailureException: public std::exception
+{
+    virtual const char* what() const throw() {
+        return "Failed to parse header";
+    }
+};
+
+
 enum StateTypes {
     PARSE_HEADER,
     PARSE_DATA,
@@ -44,6 +52,7 @@ public:
         std::swap(header_, other.header_);
         std::swap(current_interval_, other.current_interval_);
         std::swap(metadata_length_, other.metadata_length_);
+        std::swap(metadata_, other.metadata_);
         std::swap(title_, other.title_);
         std::swap(state_, other.state_);
 
@@ -59,7 +68,7 @@ public:
 
     std::string title() const { return title_; }
 
-    bool SendRequest(const std::string& path);
+    void SendRequest(const std::string& path);
 
     /**
         Set client socket for stream. Connects to ICY server on `host` and `port`.
@@ -69,7 +78,7 @@ public:
         @param port: Port on which ICY server is listening.
         @returns: 0 if connection was successful, -1 otherwise.
         **/
-    int InitializeSocket(std::string host, std::string port);
+    void InitializeSocket(std::string host, uint16_t port);
 
     void Listen();
 
@@ -77,7 +86,7 @@ public:
 private:
     void ParseData();
     void WriteToStream(size_t bytes_count);
-    bool ExtractHeaderFields();
+    void ExtractHeaderFields();
 
 
 private:

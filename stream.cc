@@ -1,4 +1,5 @@
 #include <iostream>
+#include <functional>
 
 #include <netinet/tcp.h>
 #include <sys/types.h>
@@ -18,13 +19,14 @@ static bool GetHttpHeaderField(const std::string& header, const std::string& fie
     if (start == std::string::npos) {
         return false;
     }
+    start += field.length() + 1;
 
     auto end = header.find("\r\n", start);
     if (end == std::string::npos) {
         return false;
     }
 
-    value = header.substr(start + 1, end);
+    value = header.substr(start, end - start);
     return true;
 }
 
@@ -38,13 +40,14 @@ static bool GetMetadataField(const std::string& metadata, const std::string& fie
     if (start == std::string::npos) {
         return false;
     }
+    start += field.length() + 2;
 
     auto end = metadata.find(";", start);
     if (end == std::string::npos) {
         return false;
     }
 
-    value = metadata.substr(start + 1, end - 2);
+    value = metadata.substr(start, end - start - 2);
     return true;
 }
 
@@ -68,9 +71,8 @@ std::string Header::to_string() const
 void Stream::WriteToStream(size_t bytes_count)
 {
     if (!quiting_ && !paused_) {
-        // std::cout << buffer_.substr(0, bytes_count);
-        // *stream_ << buffer_.substr(bytes_count);
-        // stream_->flush();
+        std::fwrite(buffer_.data(), sizeof(char), bytes_count, stream_);
+        std::fflush(stream_);
     }
 
     buffer_.erase(0, bytes_count);
@@ -100,7 +102,7 @@ Stream::Stream(FILE* stream, bool metadata)
     metadata_length_(0),
     title_(),
     state_(PARSE_HEADER),
-    metadata_(false),
+    metadata_(metadata),
     paused_(false),
     quiting_(false)
 {
@@ -115,7 +117,7 @@ Stream::Stream(const Stream& other)
     metadata_length_(other.metadata_length_),
     title_(other.title_),
     state_(other.state_),
-    metadata_(false),
+    metadata_(other.metadata_),
     paused_(false),
     quiting_(false)
 {
@@ -124,29 +126,29 @@ Stream::Stream(const Stream& other)
 
 Stream::~Stream() noexcept
 {
-    // stream_->close();
+    if (stream_ != NULL)
+        std::fclose(stream_);
 }
 
-bool Stream::SendRequest(const std::string& path)
+void Stream::SendRequest(const std::string& path)
 {
-    std::string request = "GET" + path + " HTTP/1.0 \r\nIcy-MetaData: " + std::to_string(metadata_) + " \r\n\r\n";
+    std::string request = "GET " + path + " HTTP/1.0 \r\nIcy-MetaData: " + std::to_string(metadata_) + " \r\n\r\n";
     size_t currently_sent = 0;
 
+    std::cerr << request << std::endl;
+
     while (currently_sent < request.length()) {
-        // TODO: check bytes_sent == 0
         ssize_t bytes_sent = send(socket_, &request.data()[currently_sent], (request.length() - currently_sent), 0);
-        if (bytes_sent < 0) {
-            return false;
+        if (bytes_sent <= 0) {
+            throw std::runtime_error("Failed to send request");
         }
 
         currently_sent += bytes_sent;
     }
-
-    return true;
 }
 
 
-int Stream::InitializeSocket(std::string host, std::string port)
+void Stream::InitializeSocket(std::string host, uint16_t port)
 {
     struct addrinfo addr_hints;
     struct addrinfo *addr_result;
@@ -156,39 +158,39 @@ int Stream::InitializeSocket(std::string host, std::string port)
     addr_hints.ai_family = AF_INET; // IPv4
     addr_hints.ai_socktype = SOCK_STREAM;
     addr_hints.ai_protocol = IPPROTO_TCP;
-    int err = getaddrinfo(host.data(), port.data(), &addr_hints, &addr_result);
-    if (err == EAI_SYSTEM) { // system error
-        syserr("getaddrinfo: %s", gai_strerror(err));
-    } else if (err != 0) { // other error (host not found, etc.)
-        fatal("getaddrinfo: %s", gai_strerror(err));
+
+    int err = getaddrinfo(host.data(), std::to_string(port).data(), &addr_hints, &addr_result);
+    if ((err < 0) || (err == EAI_SYSTEM)) {
+        freeaddrinfo(addr_result);
+        throw std::runtime_error(std::string("getaddrinfo:") + gai_strerror(err));
     }
 
     // initialize socket according to getaddrinfo results
     socket_ = socket(addr_result->ai_family, addr_result->ai_socktype, addr_result->ai_protocol);
     if (socket_ < 0) {
-        return -1;
+        freeaddrinfo(addr_result);
+        throw std::runtime_error("socket() failed");
     }
 
     // connect socket to the server
     err = connect(socket_, addr_result->ai_addr, addr_result->ai_addrlen);
     if (err < 0) {
-        return -1;
+        freeaddrinfo(addr_result);
+        throw std::runtime_error("connect() failed");
     }
 
     freeaddrinfo(addr_result);
-    debug_print("%s\n", "stream socket initialized");
-    return 0;
 }
 
 
-bool Stream::ExtractHeaderFields()
+void Stream::ExtractHeaderFields()
 {
     std::string response, metaint;
     bool success;
 
     success = GetHttpHeaderField(buffer_, "ICY", response);
     if (!success || (response.compare("200 OK") != 0))
-        return false;
+        throw ParseHeaderFailureException();
 
     GetHttpHeaderField(buffer_, "icy-name", header_.icy_name);
     GetHttpHeaderField(buffer_, "icy-notice1", header_.icy_notice1);
@@ -198,22 +200,23 @@ bool Stream::ExtractHeaderFields()
     GetHttpHeaderField(buffer_, "icy-br", header_.icy_bitrate);
 
     success = GetHttpHeaderField(buffer_, "icy-metaint", metaint);
+    std::cerr << "metaint parsing.." << metaint << std::endl;
     if (success) {
-        try {
-            header_.icy_metaint = stoul(metaint, NULL, 10);
-        } catch (...) {
-            return false;
-        }
+        std::cerr << "metaint parsing.." << std::endl;
+        header_.icy_metaint = stoul(metaint, NULL, 10);
     }
 
-    return true;
+    std::cerr << header_.to_string() << std::endl;
 }
 
 
 void Stream::Listen()
 {
     while (true) {
-        PollRecv(socket_, buffer_, 5000);
+        bool send = PollRecv(socket_, buffer_, 5000);
+        if (!send)
+            return;
+
         ParseData();
     }
 }
@@ -224,12 +227,7 @@ void Stream::ParseData()
     if (state_ == PARSE_HEADER) {
         auto pos = buffer_.find("\r\n\r\n");
         if (pos != std::string::npos) {
-            debug_print("%s\n", "parsing headers...");
-            bool success = ExtractHeaderFields();
-            if (!success) {
-                // throw FailedToExtractHeaderFields;
-                return;
-            }
+            ExtractHeaderFields();
 
             // check server decided not to send meta data
             if (metadata_ && (header_.icy_metaint == 0))
@@ -262,6 +260,8 @@ void Stream::ParseData()
 
         if (metadata_length_ > 0) {
             state_ = PARSE_METADATA;
+        } else {
+            current_interval_ = header_.icy_metaint;
         }
     } else if (state_ == PARSE_METADATA) {
         // if there is not enough data in buffer we should read more...

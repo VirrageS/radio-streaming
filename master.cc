@@ -18,19 +18,6 @@
 
 Sessions g_sessions;
 
-void clean_all()
-{
-
-}
-
-
-void handle_signal(int sig)
-{
-    clean_all();
-    exit(sig);
-}
-
-
 /**
     Thread session function, which handle everything connected with session.
     **/
@@ -183,20 +170,27 @@ int set_master_socket(int master_port)
 
     int opt = 1;
     err = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int));
-    if (err < 0)
-        syserr("setsockopt() failed");
+    if (err < 0) {
+        std::perror("setsockopt() failed");
+        return EXIT_FAILURE;
+    }
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = (master_port > 0 ? htons(master_port) : 0);
 
     err = bind(sock, (struct sockaddr*)&server, sizeof(server));
-    if (err < 0)
-        syserr("bind() failed");
+    if (err < 0) {
+        std::perror("bind() failed");
+        return EXIT_FAILURE;
+    }
+
 
     err = listen(sock, 10);
-    if (err < 0)
-        syserr("listen() failed");
+    if (err < 0) {
+        std::perror("listen() failed");
+        return EXIT_FAILURE;
+    }
 
     if (master_port == 0) {
         // get port on which master is listening
@@ -204,7 +198,8 @@ int set_master_socket(int master_port)
         socklen_t len = sizeof(server);
         err = getsockname(sock, (struct sockaddr *)&server, &len);
         if (err < 0) {
-            syserr("failed to get port number");
+            std::perror("getsockname() failed");
+            return EXIT_FAILURE;
         }
 
         std::cout << ntohs(server.sin_port) << std::endl;
@@ -219,29 +214,19 @@ int set_master_socket(int master_port)
     **/
 uint16_t validate_parameters(int argc, char* argv[])
 {
-    if (argc > 2)
-        fatal("Usage ./%s <port>", argv[0]);
+    if (argc > 2) {
+        std::cerr << "Usage ./" << argv[0] << " <port>" << std::endl;
+        return EXIT_FAILURE;
+    }
 
     uint16_t master_port = 0;
 
     if (argc == 2) {
-        // validate ports
-        std::string master_port_str(argv[1]);
-        for (char c : master_port_str) {
-            if (!isdigit(c)) {
-                fatal("Invalid number.");
-            }
-        }
-
         try {
-            auto tmp_port = stoul(master_port_str, NULL, 10);
-            if (tmp_port > 65535L) {
-                fatal("Invalid number.");
-            }
-
-            master_port = (uint16_t)tmp_port;
+            master_port = ParsePort(argv[1]);
         } catch (std::exception& e) {
-            fatal("Invalid number.");
+            std::cerr << e.what() << std::endl;
+            return EXIT_FAILURE;
         }
     }
 
@@ -251,9 +236,6 @@ uint16_t validate_parameters(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    signal(SIGINT, handle_signal);
-    signal(SIGKILL, handle_signal);
-
     srand(time(NULL));
 
     uint16_t master_port = validate_parameters(argc, argv);
@@ -262,7 +244,8 @@ int main(int argc, char* argv[])
     while (true) {
         int client_socket = accept(master_socket, NULL, NULL);
         if (client_socket < 0) {
-            syserr("accept() failed");
+            std::perror("accept() failed");
+            return EXIT_FAILURE;
         }
 
         auto session = g_sessions.add_session(client_socket);
