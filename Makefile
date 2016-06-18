@@ -6,7 +6,7 @@ CXXFLAGS = -Wall -O2 -std=c++0x -pedantic -lpthread
 master: master.o misc.o session.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-player: player.o misc.o stream.o
+player: player.o misc.o stream.o command.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 .PHONY: clean TARGET

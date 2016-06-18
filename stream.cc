@@ -136,8 +136,6 @@ Stream::SendRequest(const std::string& path)
     std::string request = "GET " + path + " HTTP/1.0 \r\nIcy-MetaData:" + std::to_string(metadata_) + " \r\n\r\n";
     size_t currently_sent = 0;
 
-    std::cerr << request << std::endl;
-
     while (currently_sent < request.length()) {
         ssize_t bytes_sent = send(socket_, &request.data()[currently_sent], (request.length() - currently_sent), 0);
         if (bytes_sent <= 0) {
