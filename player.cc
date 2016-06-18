@@ -54,8 +54,10 @@ void HandleCommands()
 
         ssize_t bytes_received = recvfrom(g_command_socket, &command, sizeof(command), 0, (struct sockaddr *)&client, (socklen_t *)&client_len);
         if (bytes_received < 0) {
-            std::perror("recvfrom() handle_commands");
-            std::exit(EXIT_FAILURE);
+            if (!g_stream.quiting()) {
+                std::perror("recvfrom() handle_commands");
+                std::exit(EXIT_FAILURE);
+            }
         } else if (bytes_received == 0) {
             debug_print("%s\n", "recieved nothing...");
         } else {
@@ -103,15 +105,14 @@ SetCommandSocket()
         std::exit(EXIT_FAILURE);
     }
 
-    // int opt = 1;
-    // err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(int));
-    // if (err < 0) {
-    //     std::perror("setsockopt(SO_REUSEPORT) failed");
-    //     std::exit(EXIT_FAILURE);
-    // }
+    int opt = 1;
+    err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(int));
+    if (err < 0) {
+        std::perror("setsockopt(SO_REUSEPORT) failed");
+        std::exit(EXIT_FAILURE);
+    }
 
     // binding the listening socket
-
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
     server_address.sin_port = htons(g_command_port);
@@ -168,8 +169,6 @@ ValidateParameters(int argc, char *argv[])
         std::cerr << "Meta data (" << argv[6] << ") should be 'yes' or 'no'" << std::endl;
         std::exit(EXIT_FAILURE);
     }
-
-    std::cerr << metadata << std::endl;
 
     return std::make_tuple(output_file, metadata, argv[1], server_port, argv[2]);
 }

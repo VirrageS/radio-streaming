@@ -80,7 +80,7 @@ void Stream::WriteToStream(size_t bytes_count)
 
 
 Stream::Stream()
-  : stream_(stdout),
+  : stream_(NULL),
     buffer_(),
     socket_(-1),
     header_(),
@@ -130,9 +130,10 @@ Stream::~Stream() noexcept
         std::fclose(stream_);
 }
 
-void Stream::SendRequest(const std::string& path)
+void
+Stream::SendRequest(const std::string& path)
 {
-    std::string request = "GET " + path + " HTTP/1.0 \r\nIcy-MetaData: " + std::to_string(metadata_) + " \r\n\r\n";
+    std::string request = "GET " + path + " HTTP/1.0 \r\nIcy-MetaData:" + std::to_string(metadata_) + " \r\n\r\n";
     size_t currently_sent = 0;
 
     std::cerr << request << std::endl;
@@ -148,10 +149,11 @@ void Stream::SendRequest(const std::string& path)
 }
 
 
-void Stream::InitializeSocket(std::string host, uint16_t port)
+void
+Stream::InitializeSocket(std::string host, uint16_t port)
 {
     struct addrinfo addr_hints;
-    struct addrinfo *addr_result;
+    struct addrinfo* addr_result;
 
     // 'converting' host/port in string to struct addrinfo
     memset(&addr_hints, 0, sizeof(struct addrinfo));
@@ -160,9 +162,9 @@ void Stream::InitializeSocket(std::string host, uint16_t port)
     addr_hints.ai_protocol = IPPROTO_TCP;
 
     int err = getaddrinfo(host.data(), std::to_string(port).data(), &addr_hints, &addr_result);
-    if ((err < 0) || (err == EAI_SYSTEM)) {
+    if (err != 0) {
         freeaddrinfo(addr_result);
-        throw std::runtime_error(std::string("getaddrinfo:") + gai_strerror(err));
+        throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err));
     }
 
     // initialize socket according to getaddrinfo results
@@ -183,7 +185,8 @@ void Stream::InitializeSocket(std::string host, uint16_t port)
 }
 
 
-void Stream::ExtractHeaderFields()
+void
+Stream::ExtractHeaderFields()
 {
     std::string response, metaint;
     bool success;
@@ -200,29 +203,28 @@ void Stream::ExtractHeaderFields()
     GetHttpHeaderField(buffer_, "icy-br", header_.icy_bitrate);
 
     success = GetHttpHeaderField(buffer_, "icy-metaint", metaint);
-    std::cerr << "metaint parsing.." << metaint << std::endl;
     if (success) {
-        std::cerr << "metaint parsing.." << std::endl;
         header_.icy_metaint = stoul(metaint, NULL, 10);
     }
-
-    std::cerr << header_.to_string() << std::endl;
 }
 
 
-void Stream::Listen()
+void
+Stream::Listen()
 {
-    while (true) {
-        bool send = PollRecv(socket_, buffer_, 5000);
-        if (!send)
-            return;
-
-        ParseData();
+    while (!quiting_) {
+        bool recieved = PollRecv(socket_, buffer_, 5000);
+        if (recieved) {
+            ParseData();
+        } else {
+            quiting_ = true;
+        }
     }
 }
 
 
-void Stream::ParseData()
+void
+Stream::ParseData()
 {
     if (state_ == PARSE_HEADER) {
         auto pos = buffer_.find("\r\n\r\n");

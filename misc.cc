@@ -32,14 +32,14 @@ int strtob(bool* b, const char* str)
 bool
 PollRecv(int socket, std::string& buffer, unsigned int timeout)
 {
-    // struct pollfd poll_socket[1];
-    // poll_socket[0].fd = socket;
-    // poll_socket[0].events = POLLIN;
-    //
-    // int err = poll(poll_socket, 1, timeout);
-    // if (err <= 0) {
-    //     throw ReceiveDataFailureException();
-    // }
+    struct pollfd poll_socket[1];
+    poll_socket[0].fd = socket;
+    poll_socket[0].events = POLLIN;
+
+    int err = poll(poll_socket, 1, timeout);
+    if (err <= 0) {
+        throw ReceiveDataFailureException();
+    }
 
     std::vector<char> tmp_buffer(10000);
     ssize_t bytes_recieved = recv(socket, tmp_buffer.data(), tmp_buffer.size(), 0);
@@ -65,7 +65,7 @@ ParsePort(std::string port)
     }
 
     auto tmp_port = stoul(port, NULL, 10);
-    if (tmp_port > 65535L) {
+    if ((tmp_port > 65535L) || (tmp_port == 0L)) {
         throw std::overflow_error("Invalid port");
     }
 
