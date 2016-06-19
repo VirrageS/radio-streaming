@@ -36,8 +36,8 @@ int main(int argc, char* argv[])
     uint16_t master_port = validate_parameters(argc, argv);
 
     Sessions sessions;
-    sessions.InitializeSocket(master_port);
     try {
+        sessions.InitializeSocket(master_port);
         sessions.Accept();
     } catch (std::exception& e) {
         std::perror(e.what());
