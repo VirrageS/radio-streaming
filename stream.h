@@ -68,7 +68,7 @@ public:
 
     std::string title() const { return title_; }
 
-    void SendRequest(const std::string& path);
+    void SendRequest(const std::string& path) const;
 
     /**
         Set client socket for stream. Connects to ICY server on `host` and `port`.
@@ -89,7 +89,6 @@ private:
     void ExtractHeaderFields();
 
 
-private:
     FILE* stream_;
     std::string buffer_; // buffer in which we store all the data
 

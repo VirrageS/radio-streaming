@@ -1,205 +1,8 @@
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <arpa/inet.h> //inet_addr
-#include <fcntl.h>
-
-#include <iterator>
+#include <iostream>
 
 #include "misc.h"
 #include "session.h"
-
-Sessions g_sessions;
-
-/**
-    Thread session function, which handle everything connected with session.
-    **/
-void handle_session(std::shared_ptr<Session> session)
-{
-    debug_print("[%s] started handling session...\n", session->id().c_str());
-
-    bool added = session->add_poll_fd(session->socket());
-    if (!added) {
-        goto end_session;
-    }
-
-    while (true) {
-        debug_print("[%s] before poll [%d - %lu]... timeout in %u...\n", session->id().c_str(), session->socket(), session->poll_sockets().size(), session->get_timeout());
-        int err = poll(session->poll_sockets().data(), (int)session->poll_sockets().size(), session->get_timeout() * 1000);
-        debug_print("[%s] after poll [%d - %lu]...\n", session->id().c_str(), session->socket(), session->poll_sockets().size());
-
-        if (err < 0) {
-            std::cerr << "poll() failed" << std::endl;
-            goto end_session;
-        } else if (err == 0) {
-            debug_print("[%s] handling timeout...\n", session->id().c_str());
-            session->handle_timeout();
-        } else {
-            for (auto descriptor = session->poll_sockets().begin(); descriptor != session->poll_sockets().end(); ++descriptor) {
-                if (descriptor->revents == 0)
-                    continue;
-
-                if (!(descriptor->revents & (POLLIN | POLLHUP))) {
-                    std::cerr << descriptor->fd << " - unexpected revents = " << descriptor->revents << std::endl;
-                    goto end_session;
-                }
-
-                if (descriptor->fd != session->socket()) {
-                    // we got message on player stderr
-                    // so we should delete this
-                    std::string buffer = "";
-
-                    while (true) {
-                        std::vector<char> tmp_buffer(4096);
-                        ssize_t bytes_recieved = read(descriptor->fd, tmp_buffer.data(), tmp_buffer.size() - 1);
-                        if (bytes_recieved <= 0)
-                            break;
-
-                        tmp_buffer.resize(bytes_recieved);
-                        buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
-                    }
-
-                    debug_print("%s\n", "got something on player stderr");
-
-                    for (auto radio : session->radios()) {
-                        if (radio->player_stderr() == descriptor->fd) {
-                            std::string msg = "ERROR " + radio->id() + ": " + buffer;
-
-                            session->send_session_message(msg);
-                            session->remove_radio_by_id(radio->id());
-                            break;
-                        }
-                    }
-                } else {
-                    std::vector<char> tmp_buffer(4096);
-
-                    ssize_t bytes_recieved = read(session->socket(), tmp_buffer.data(), tmp_buffer.size() - 1);
-                    if (bytes_recieved < 0) {
-                        if (errno != EWOULDBLOCK) {
-                            std::cerr << "read() in session failed" << std::endl;
-                            goto end_session;
-                        }
-                    } else if (bytes_recieved == 0) {
-                        debug_print("ending %d connection\n", session->socket());
-                        goto end_session;
-                    } else {
-                        tmp_buffer.resize(bytes_recieved);
-                        session->buffer.append(tmp_buffer.cbegin(), tmp_buffer.cend());
-
-                        debug_print("%s\n", "got something to read");
-                        debug_print("message: %s\n", session->buffer.c_str());
-
-                        size_t end = 0;
-                        for (size_t i = 0; i < session->buffer.length(); ++i) {
-                            if (i + 1 < session->buffer.length()) {
-                                if (session->buffer[i] == '\r' && session->buffer[i + 1] == '\n') {
-                                    end = i + 2;
-                                    break;
-                                }
-                            }
-
-                            if ((session->buffer[i] == '\r') || (session->buffer[i] == '\n')) {
-                                end = i + 1;
-                                break;
-                            }
-                        }
-
-                        if (end > 0) {
-                            std::string message = session->buffer.substr(0, end);
-
-                            // remove controlling bytes
-                            bool found = true;
-                            while (found) {
-                                found = false;
-
-                                for (size_t i = 0; i < message.length(); i++) {
-                                    if (message[i] == '\xff') {
-                                        size_t to_remove;
-
-                                        if (message[i + 1] == '\xff') {
-                                            to_remove = 2;
-                                        } else if (message[i + 1] > '\xfa') {
-                                            to_remove = 3;
-                                        } else  {
-                                            to_remove = 2;
-                                        }
-
-                                        found = true;
-                                        message.erase(std::next(message.begin(), i), std::next(message.begin(), i + to_remove));
-                                        break;
-                                    }
-                                }
-                            }
-
-                            session->parse(message);
-                            session->buffer.erase(0, end);
-                        }
-                    }
-                }
-
-                break;
-            }
-        }
-    }
-
-end_session:
-    debug_print("[%s] closing handling session...\n", session->id().c_str());
-    g_sessions.remove_session_by_id(session->id());
-}
-
-/**
-    Set connection on TCP listen socket.
-    **/
-int set_master_socket(int master_port)
-{
-    int err, sock;
-    struct sockaddr_in server;
-
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        std::perror("socket() failed");
-        return EXIT_FAILURE;
-    }
-
-    int opt = 1;
-    err = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int));
-    if (err < 0) {
-        std::perror("setsockopt() failed");
-        return EXIT_FAILURE;
-    }
-
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = (master_port > 0 ? htons(master_port) : 0);
-
-    err = bind(sock, (struct sockaddr*)&server, sizeof(server));
-    if (err < 0) {
-        std::perror("bind() failed");
-        return EXIT_FAILURE;
-    }
-
-
-    err = listen(sock, 10);
-    if (err < 0) {
-        std::perror("listen() failed");
-        return EXIT_FAILURE;
-    }
-
-    if (master_port == 0) {
-        // get port on which master is listening
-
-        socklen_t len = sizeof(server);
-        err = getsockname(sock, (struct sockaddr *)&server, &len);
-        if (err < 0) {
-            std::perror("getsockname() failed");
-            return EXIT_FAILURE;
-        }
-
-        std::cout << ntohs(server.sin_port) << std::endl;
-    }
-
-    return sock;
-}
-
+#include "sessions.h"
 
 /**
     Validates program parameters
@@ -231,20 +34,15 @@ int main(int argc, char* argv[])
     srand(time(NULL));
 
     uint16_t master_port = validate_parameters(argc, argv);
-    int master_socket = set_master_socket(master_port);
 
-    while (true) {
-        int client_socket = accept(master_socket, NULL, NULL);
-        if (client_socket < 0) {
-            std::perror("accept() failed");
-            return EXIT_FAILURE;
-        }
-
-        auto session = g_sessions.add_session(client_socket);
-        std::thread (handle_session, session).detach();
+    Sessions sessions;
+    sessions.InitializeSocket(master_port);
+    try {
+        sessions.Accept();
+    } catch (std::exception& e) {
+        std::perror(e.what());
+        return EXIT_FAILURE;
     }
 
-
-    clean_all();
     return 0;
 }

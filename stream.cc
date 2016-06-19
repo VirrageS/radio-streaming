@@ -131,7 +131,7 @@ Stream::~Stream() noexcept
 }
 
 void
-Stream::SendRequest(const std::string& path)
+Stream::SendRequest(const std::string& path) const
 {
     std::string request = "GET " + path + " HTTP/1.0 \r\nIcy-MetaData:" + std::to_string(metadata_) + " \r\n\r\n";
     size_t currently_sent = 0;
